@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { ClipboardList, PackageCheck, Truck, Warehouse, Package, TrendingUp } from "lucide-react";
 import StatsCard from "../components/wms/StatsCard";
 import StatusBadge from "../components/wms/StatusBadge";
@@ -22,14 +22,14 @@ export default function Dashboard() {
 
       const [r, a, i] = await Promise.all([
         isClient
-          ? base44.entities.ReceptionRequest.filter(filter, "-created_date", 50)
-          : base44.entities.ReceptionRequest.list("-created_date", 50),
+          ? db.entities.ReceptionRequest.filter(filter, "-created_date", 50)
+          : db.entities.ReceptionRequest.list("-created_date", 50),
         isClient
-          ? base44.entities.AssemblyOrder.filter(filter, "-created_date", 50)
-          : base44.entities.AssemblyOrder.list("-created_date", 50),
+          ? db.entities.AssemblyOrder.filter(filter, "-created_date", 50)
+          : db.entities.AssemblyOrder.list("-created_date", 50),
         isClient
-          ? base44.entities.Inventory.filter(filter, "-created_date", 100)
-          : base44.entities.Inventory.list("-created_date", 100),
+          ? db.entities.Inventory.filter(filter, "-created_date", 100)
+          : db.entities.Inventory.list("-created_date", 100),
       ]);
       setReceptions(r);
       setAssemblies(a);

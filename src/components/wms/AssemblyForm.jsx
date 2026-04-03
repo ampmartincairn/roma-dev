@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +19,7 @@ export default function AssemblyForm({ onSubmit, onCancel, loading, userEmail })
 
   useEffect(() => {
     if (!userEmail) return;
-    base44.entities.Inventory.filter({ client_email: userEmail }, "product_name", 500)
+    db.entities.Inventory.filter({ client_email: userEmail }, "product_name", 500)
       .then(inv => setProducts(inv.filter(i => (i.quantity || 0) > 0)));
   }, [userEmail]);
 

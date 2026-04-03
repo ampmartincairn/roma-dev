@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { BarChart3, ClipboardList, PackageCheck, Truck, Warehouse } from "lucide-react";
 import PageHeader from "../components/wms/PageHeader";
 import StatsCard from "../components/wms/StatsCard";
@@ -18,9 +18,9 @@ export default function StatsPage() {
   useEffect(() => {
     const load = async () => {
       const [r, a, i] = await Promise.all([
-        base44.entities.ReceptionRequest.list("-created_date", 200),
-        base44.entities.AssemblyOrder.list("-created_date", 200),
-        base44.entities.Inventory.list("-created_date", 500),
+        db.entities.ReceptionRequest.list("-created_date", 200),
+        db.entities.AssemblyOrder.list("-created_date", 200),
+        db.entities.Inventory.list("-created_date", 500),
       ]);
       setReceptions(r);
       setAssemblies(a);

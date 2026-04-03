@@ -33,7 +33,7 @@ const NAV_ITEMS = {
   ],
 };
 
-export default function Sidebar({ role, isOpen, onClose, user }) {
+export default function Sidebar({ role, isOpen, onClose, user, onLogout }) {
   const location = useLocation();
   const items = NAV_ITEMS[role] || NAV_ITEMS.client;
 

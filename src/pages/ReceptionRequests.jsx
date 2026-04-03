@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { Plus, Search, Filter, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +32,8 @@ export default function ReceptionRequests() {
   const loadData = async () => {
     const isClient = role === "client";
     const data = isClient
-      ? await base44.entities.ReceptionRequest.filter({ client_email: user?.email }, "-created_date", 100)
-      : await base44.entities.ReceptionRequest.list("-created_date", 100);
+      ? await db.entities.ReceptionRequest.filter({ client_email: user?.email }, "-created_date", 100)
+      : await db.entities.ReceptionRequest.list("-created_date", 100);
     setRequests(data);
     setLoading(false);
   };
@@ -45,7 +45,7 @@ export default function ReceptionRequests() {
   const handleCreate = async (form) => {
     setCreating(true);
     const num = "ПР-" + Date.now().toString(36).toUpperCase();
-    await base44.entities.ReceptionRequest.create({
+    await db.entities.ReceptionRequest.create({
       request_number: num,
       client_email: user.email,
       client_name: user.full_name,
@@ -55,7 +55,7 @@ export default function ReceptionRequests() {
       comment: form.comment,
       items: form.items,
     });
-    await base44.entities.ActionLog.create({
+    await db.entities.ActionLog.create({
       user_email: user.email,
       user_name: user.full_name,
       action: "Создана заявка на приёмку",
@@ -85,17 +85,17 @@ export default function ReceptionRequests() {
       }));
 
       for (const item of updateData.items) {
-        const existing = await base44.entities.Inventory.filter({
+        const existing = await db.entities.Inventory.filter({
           sku: item.sku,
           client_email: req.client_email,
           warehouse: req.warehouse,
         });
         if (existing.length > 0) {
-          await base44.entities.Inventory.update(existing[0].id, {
+          await db.entities.Inventory.update(existing[0].id, {
             quantity: (existing[0].quantity || 0) + (item.received_qty || 0),
           });
         } else {
-          await base44.entities.Inventory.create({
+          await db.entities.Inventory.create({
             product_name: item.product_name,
             sku: item.sku,
             client_email: req.client_email,
@@ -107,8 +107,8 @@ export default function ReceptionRequests() {
       }
     }
 
-    await base44.entities.ReceptionRequest.update(req.id, updateData);
-    await base44.entities.ActionLog.create({
+    await db.entities.ReceptionRequest.update(req.id, updateData);
+    await db.entities.ActionLog.create({
       user_email: user.email,
       user_name: user.full_name,
       action: `Статус заявки изменён на "${newStatus}"`,

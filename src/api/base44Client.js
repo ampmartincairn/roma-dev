@@ -26,23 +26,24 @@ const ENTITY_SCHEMAS = {
     name: 'User',
     type: 'object',
     properties: {
+      username: { type: 'string' },
       email: { type: 'string' },
+      password: { type: 'string' },
       full_name: { type: 'string' },
       role: { type: 'string' },
       company_name: { type: 'string' }
     },
-    required: ['email', 'role']
+    required: ['username', 'password', 'role']
   }
 };
 
 let SqlJs;
-let db;
-let initDbPromise;
+let sqliteDb;
+let initPromise;
 
 const sqlType = (schemaType) => {
   if (schemaType === 'number') return 'REAL';
   if (schemaType === 'boolean') return 'INTEGER';
-  // arrays and objects serialized to JSON
   if (schemaType === 'array' || schemaType === 'object') return 'TEXT';
   return 'TEXT';
 };
@@ -76,39 +77,73 @@ const getOrderClause = (orderBy) => {
   if (!orderBy) return '';
   const direction = orderBy.startsWith('-') ? 'DESC' : 'ASC';
   const col = orderBy.replace(/^-/, '');
-  return `ORDER BY ${col} ${direction}`;
+  return `ORDER BY "${col}" ${direction}`;
 };
 
-const getDb = async () => {
-  if (db) return db;
-  if (!initDbPromise) {
-    initDbPromise = (async () => {
+const initializeDb = async () => {
+  if (initPromise) return initPromise;
+  
+  initPromise = (async () => {
+    try {
       SqlJs = await initSqlJs({ locateFile: () => wasmUrl });
+      
       const saved = localStorage.getItem(STORAGE_DB_KEY);
-      db = saved ? new SqlJs.Database(decode(saved)) : new SqlJs.Database();
+      sqliteDb = saved ? new SqlJs.Database(decode(saved)) : new SqlJs.Database();
 
-      // ensure tables exist
+      // Create tables
       for (const schema of Object.values(ENTITY_SCHEMAS)) {
         const table = schema.name;
-        const exists = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`);
+        const exists = sqliteDb.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`);
+        
         if (exists.length === 0) {
           const columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT'];
           for (const [field, prop] of Object.entries(schema.properties || {})) {
             columns.push(`"${field}" ${sqlType(prop.type)}`);
           }
-          columns.push('created_date TEXT', 'updated_date TEXT');
-          db.run(`CREATE TABLE "${table}" (${columns.join(', ')})`);
+          columns.push('created_date TEXT DEFAULT CURRENT_TIMESTAMP');
+          columns.push('updated_date TEXT DEFAULT CURRENT_TIMESTAMP');
+          
+          sqliteDb.run(`CREATE TABLE "${table}" (${columns.join(', ')})`);;
         }
       }
-      return db;
-    })();
+      
+      // Create default admin user if none exist
+      const userExists = sqliteDb.exec('SELECT COUNT(*) as cnt FROM User');
+      const userCount = userExists[0]?.values[0]?.[0] || 0;
+      
+      if (userCount === 0) {
+        const now = getTimestamp();
+        sqliteDb.run(
+          `INSERT INTO User (email, full_name, role, company_name, created_date, updated_date) VALUES (?, ?, ?, ?, ?, ?)`,
+          ['admin@local', 'Administrator', 'admin', 'Local WMS', now, now]
+        );
+        saveDb();
+      }
+      
+      return sqliteDb;
+    } catch (error) {
+      console.error('DB initialization failed:', error);
+      throw error;
+    }
+  })();
+  
+  return initPromise;
+};
+
+const getDb = async () => {
+  if (!sqliteDb) {
+    await initializeDb();
   }
-  return initDbPromise;
+  return sqliteDb;
 };
 
 const saveDb = () => {
-  if (!db) return;
-  localStorage.setItem(STORAGE_DB_KEY, encode(db.export()));
+  if (!sqliteDb) return;
+  try {
+    localStorage.setItem(STORAGE_DB_KEY, encode(sqliteDb.export()));
+  } catch (error) {
+    console.error('DB save failed:', error);
+  }
 };
 
 const toObjects = (queryResult, schema) => {
@@ -137,6 +172,7 @@ const executeFilter = async (entity, filter = {}, orderBy = '-created_date', lim
   const schema = ENTITY_SCHEMAS[entity];
   let where = '';
   const values = [];
+  
   if (filter && Object.keys(filter).length > 0) {
     const conditions = Object.entries(filter).map(([k, v]) => {
       values.push(inferValue(v));
@@ -144,16 +180,19 @@ const executeFilter = async (entity, filter = {}, orderBy = '-created_date', lim
     });
     where = `WHERE ${conditions.join(' AND ')}`;
   }
+  
   const order = getOrderClause(orderBy);
   const limitSql = limit ? `LIMIT ${Number(limit)}` : '';
   const stmt = db.prepare(`SELECT * FROM "${entity}" ${where} ${order} ${limitSql}`);
   stmt.bind(values);
+  
   const result = { columns: [], values: [] };
   while (stmt.step()) {
     if (!result.columns.length) result.columns = stmt.getColumnNames();
     result.values.push(stmt.get());
   }
   stmt.free();
+  
   const rows = result.values.map((rowArray) => {
     const row = {};
     result.columns.forEach((col, idx) => {
@@ -161,6 +200,7 @@ const executeFilter = async (entity, filter = {}, orderBy = '-created_date', lim
     });
     return parseRecord(row, schema);
   });
+  
   return rows;
 };
 
@@ -169,13 +209,17 @@ const executeCreate = async (entity, record) => {
   const now = getTimestamp();
   const schema = ENTITY_SCHEMAS[entity];
   const payload = { ...record };
-  Object.entries(payload).forEach(([k, v]) => { payload[k] = inferValue(v); });
+  
+  Object.entries(payload).forEach(([k, v]) => {
+    payload[k] = inferValue(v);
+  });
 
   const columns = [...Object.keys(payload), 'created_date', 'updated_date'];
   const placeholders = columns.map(() => '?');
   const values = [...Object.values(payload), now, now];
 
-  const stmt = db.prepare(`INSERT INTO "${entity}" (${columns.map(c => '"' + c + '"').join(', ')}) VALUES (${placeholders.join(', ')})`);
+  const columnStr = columns.map(c => `"${c}"`).join(', ');
+  const stmt = db.prepare(`INSERT INTO "${entity}" (${columnStr}) VALUES (${placeholders.join(', ')})`);
   stmt.bind(values);
   stmt.step();
   stmt.free();
@@ -189,7 +233,10 @@ const executeUpdate = async (entity, id, updates) => {
   const db = await getDb();
   const now = getTimestamp();
   const payload = { ...updates };
-  Object.entries(payload).forEach(([k, v]) => { payload[k] = inferValue(v); });
+  
+  Object.entries(payload).forEach(([k, v]) => {
+    payload[k] = inferValue(v);
+  });
 
   const setClauses = Object.keys(payload).map((k) => `"${k}" = ?`).join(', ');
   const values = [...Object.values(payload), now, id];
@@ -223,38 +270,57 @@ const executeGetById = async (entity, id) => {
   return row ? parseRecord(row, schema) : null;
 };
 
-const getOrCreateCurrentUser = async () => {
-  const saved = localStorage.getItem(STORAGE_USER_KEY);
-  if (saved) {
-    return JSON.parse(saved);
-  }
+// Ensure DB is initialized on module load
+initializeDb().catch(err => console.error('Failed to initialize DB:', err));
 
-  const users = await executeList('User', '-created_date', 1);
-  if (users.length > 0) {
-    localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(users[0]));
-    return users[0];
-  }
-
-  // create default admin user if no users exist
-  const admin = await executeCreate('User', {
-    email: 'admin@example.com',
-    full_name: 'Администратор',
-    role: 'admin',
-    company_name: 'Владелец'
-  });
-  localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(admin));
-  return admin;
-};
-
-export const base44 = {
+export const db = {
+  initialized: () => !!sqliteDb,
+  
   entities: {
-    ReceptionRequest: { list: async (o, l) => executeList('ReceptionRequest', o, l), filter: async (f, o, l) => executeFilter('ReceptionRequest', f, o, l), create: async (d) => executeCreate('ReceptionRequest', d), update: async (i, d) => executeUpdate('ReceptionRequest', i, d), delete: async (i) => executeDelete('ReceptionRequest', i) },
-    AssemblyOrder: { list: async (o, l) => executeList('AssemblyOrder', o, l), filter: async (f, o, l) => executeFilter('AssemblyOrder', f, o, l), create: async (d) => executeCreate('AssemblyOrder', d), update: async (i, d) => executeUpdate('AssemblyOrder', i, d), delete: async (i) => executeDelete('AssemblyOrder', i) },
-    Inventory: { list: async (o, l) => executeList('Inventory', o, l), filter: async (f, o, l) => executeFilter('Inventory', f, o, l), create: async (d) => executeCreate('Inventory', d), update: async (i, d) => executeUpdate('Inventory', i, d), delete: async (i) => executeDelete('Inventory', i) },
-    Product: { list: async (o, l) => executeList('Product', o, l), filter: async (f, o, l) => executeFilter('Product', f, o, l), create: async (d) => executeCreate('Product', d), update: async (i, d) => executeUpdate('Product', i, d), delete: async (i) => executeDelete('Product', i) },
-    ActionLog: { list: async (o, l) => executeList('ActionLog', o, l), filter: async (f, o, l) => executeFilter('ActionLog', f, o, l), create: async (d) => executeCreate('ActionLog', d), update: async (i, d) => executeUpdate('ActionLog', i, d), delete: async (i) => executeDelete('ActionLog', i) },
-    User: { list: async (o, l) => executeList('User', o, l), filter: async (f, o, l) => executeFilter('User', f, o, l), create: async (d) => executeCreate('User', d), update: async (i, d) => executeUpdate('User', i, d), delete: async (i) => executeDelete('User', i) }
+    ReceptionRequest: {
+      list: (o, l) => executeList('ReceptionRequest', o, l),
+      filter: (f, o, l) => executeFilter('ReceptionRequest', f, o, l),
+      create: (d) => executeCreate('ReceptionRequest', d),
+      update: (i, d) => executeUpdate('ReceptionRequest', i, d),
+      delete: (i) => executeDelete('ReceptionRequest', i)
+    },
+    AssemblyOrder: {
+      list: (o, l) => executeList('AssemblyOrder', o, l),
+      filter: (f, o, l) => executeFilter('AssemblyOrder', f, o, l),
+      create: (d) => executeCreate('AssemblyOrder', d),
+      update: (i, d) => executeUpdate('AssemblyOrder', i, d),
+      delete: (i) => executeDelete('AssemblyOrder', i)
+    },
+    Inventory: {
+      list: (o, l) => executeList('Inventory', o, l),
+      filter: (f, o, l) => executeFilter('Inventory', f, o, l),
+      create: (d) => executeCreate('Inventory', d),
+      update: (i, d) => executeUpdate('Inventory', i, d),
+      delete: (i) => executeDelete('Inventory', i)
+    },
+    Product: {
+      list: (o, l) => executeList('Product', o, l),
+      filter: (f, o, l) => executeFilter('Product', f, o, l),
+      create: (d) => executeCreate('Product', d),
+      update: (i, d) => executeUpdate('Product', i, d),
+      delete: (i) => executeDelete('Product', i)
+    },
+    ActionLog: {
+      list: (o, l) => executeList('ActionLog', o, l),
+      filter: (f, o, l) => executeFilter('ActionLog', f, o, l),
+      create: (d) => executeCreate('ActionLog', d),
+      update: (i, d) => executeUpdate('ActionLog', i, d),
+      delete: (i) => executeDelete('ActionLog', i)
+    },
+    User: {
+      list: (o, l) => executeList('User', o, l),
+      filter: (f, o, l) => executeFilter('User', f, o, l),
+      create: (d) => executeCreate('User', d),
+      update: (i, d) => executeUpdate('User', i, d),
+      delete: (i) => executeDelete('User', i)
+    }
   },
+  
   users: {
     inviteUser: async (email, role) => {
       const existing = await executeFilter('User', { email: email.toLowerCase() }, '-created_date', 1);
@@ -271,17 +337,58 @@ export const base44 = {
       return user;
     }
   },
+  
   auth: {
-    me: async () => {
-      const user = await getOrCreateCurrentUser();
-      return user;
+    login: async (username, password) => {
+      const users = await executeFilter('User', { username: username.toLowerCase() }, '-created_date', 1);
+      if (users.length === 0) {
+        throw new Error('Пользователь не найден');
+      }
+      const user = users[0];
+      if (user.password !== password) {
+        throw new Error('Неверный пароль');
+      }
+      const userData = { ...user };
+      delete userData.password;
+      localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(userData));
+      return userData;
     },
+    
+    register: async (username, email, password, fullName, role = 'user') => {
+      const existing = await executeFilter('User', { username: username.toLowerCase() }, '-created_date', 1);
+      if (existing.length > 0) {
+        throw new Error('Пользователь с таким именем уже существует');
+      }
+      const user = await executeCreate('User', {
+        username: username.toLowerCase(),
+        email: email.toLowerCase(),
+        password: password,
+        full_name: fullName,
+        role,
+        company_name: ''
+      });
+      const userData = { ...user };
+      delete userData.password;
+      localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(userData));
+      return userData;
+    },
+    
+    me: async () => {
+      const saved = localStorage.getItem(STORAGE_USER_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      return null;
+    },
+    
     logout: () => {
       localStorage.removeItem(STORAGE_USER_KEY);
     },
+    
     redirectToLogin: () => {
       window.location.reload();
     }
   }
 };
+
 

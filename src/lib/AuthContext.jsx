@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { db } from '@/api/base44Client';
 
 const AuthContext = createContext();
 
@@ -7,14 +7,19 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
     const initialize = async () => {
       setIsLoadingAuth(true);
-      setAuthError(null);
       try {
-        const currentUser = await base44.auth.me();
+        // Wait a bit for DB to fully initialize
+        let retries = 0;
+        while (!db.initialized() && retries < 50) {
+          await new Promise(r => setTimeout(r, 100));
+          retries++;
+        }
+        
+        const currentUser = await db.auth.me();
         setUser(currentUser);
         setIsAuthenticated(true);
       } catch (error) {
@@ -29,13 +34,13 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = () => {
-    base44.auth.logout();
+    db.auth.logout();
     setUser(null);
     setIsAuthenticated(false);
   };
 
   const navigateToLogin = () => {
-    base44.auth.redirectToLogin();
+    db.auth.redirectToLogin();
   };
 
   return (
@@ -43,7 +48,6 @@ export const AuthProvider = ({ children }) => {
       user,
       isAuthenticated,
       isLoadingAuth,
-      authError,
       logout,
       navigateToLogin
     }}>

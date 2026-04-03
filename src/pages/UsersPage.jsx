@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { Search, Users, UserPlus, Shield, User, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ export default function UsersPage() {
   const [inviting, setInviting] = useState(false);
 
   const loadData = async () => {
-    const data = await base44.entities.User.list("-created_date", 200);
+    const data = await db.entities.User.list("-created_date", 200);
     setUsers(data);
     setLoading(false);
   };
@@ -40,13 +40,13 @@ export default function UsersPage() {
   const handleInvite = async (e) => {
     e.preventDefault();
     setInviting(true);
-    await base44.users.inviteUser(inviteEmail, inviteRole === "client" ? "user" : inviteRole === "admin" ? "admin" : "user");
+    await db.users.inviteUser(inviteEmail, inviteRole === "client" ? "user" : inviteRole === "admin" ? "admin" : "user");
 
     if (inviteRole === "operator") {
-      const allUsers = await base44.entities.User.list("-created_date", 200);
+      const allUsers = await db.entities.User.list("-created_date", 200);
       const invited = allUsers.find(u => u.email === inviteEmail);
       if (invited) {
-        await base44.entities.User.update(invited.id, { role: "operator" });
+        await db.entities.User.update(invited.id, { role: "operator" });
       }
     }
 
@@ -58,7 +58,7 @@ export default function UsersPage() {
   };
 
   const updateUserRole = async (userId, newRole) => {
-    await base44.entities.User.update(userId, { role: newRole });
+    await db.entities.User.update(userId, { role: newRole });
     toast.success("Роль обновлена");
     loadData();
   };

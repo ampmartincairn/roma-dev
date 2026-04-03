@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { Search, Truck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import PageHeader from "../components/wms/PageHeader";
@@ -18,8 +18,8 @@ export default function ShipmentsPage() {
   useEffect(() => {
     const load = async () => {
       const all = role === "client"
-        ? await base44.entities.AssemblyOrder.filter({ client_email: user?.email }, "-created_date", 100)
-        : await base44.entities.AssemblyOrder.list("-created_date", 100);
+        ? await db.entities.AssemblyOrder.filter({ client_email: user?.email }, "-created_date", 100)
+        : await db.entities.AssemblyOrder.list("-created_date", 100);
       setOrders(all.filter(o => ["упакована", "отгружена"].includes(o.status)));
       setLoading(false);
     };

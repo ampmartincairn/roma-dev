@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { Search, History, ClipboardList, PackageCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,8 +20,8 @@ export default function HistoryPage() {
   useEffect(() => {
     const load = async () => {
       const [r, a] = await Promise.all([
-        base44.entities.ReceptionRequest.filter({ client_email: user?.email }, "-created_date", 100),
-        base44.entities.AssemblyOrder.filter({ client_email: user?.email }, "-created_date", 100),
+        db.entities.ReceptionRequest.filter({ client_email: user?.email }, "-created_date", 100),
+        db.entities.AssemblyOrder.filter({ client_email: user?.email }, "-created_date", 100),
       ]);
       setReceptions(r);
       setAssemblies(a);

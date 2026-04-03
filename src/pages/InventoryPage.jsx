@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { Search, Warehouse } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,8 +18,8 @@ export default function InventoryPage() {
     const load = async () => {
       const isClient = role === "client";
       const data = isClient
-        ? await base44.entities.Inventory.filter({ client_email: user?.email }, "-updated_date", 200)
-        : await base44.entities.Inventory.list("-updated_date", 200);
+        ? await db.entities.Inventory.filter({ client_email: user?.email }, "-updated_date", 200)
+        : await db.entities.Inventory.list("-updated_date", 200);
       setInventory(data);
       setLoading(false);
     };

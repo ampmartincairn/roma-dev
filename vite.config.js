@@ -9,7 +9,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src')
     }
   },
-  logLevel: 'error', // Suppress warnings, only show errors
+  server: {
+    middlewareMode: false,
+    hmr: true
+  },
   plugins: [
     react(),
   ]

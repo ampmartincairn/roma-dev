@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { Plus, Search, Filter, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +32,8 @@ export default function AssemblyOrders() {
   const loadData = async () => {
     const isClient = role === "client";
     const data = isClient
-      ? await base44.entities.AssemblyOrder.filter({ client_email: user?.email }, "-created_date", 100)
-      : await base44.entities.AssemblyOrder.list("-created_date", 100);
+      ? await db.entities.AssemblyOrder.filter({ client_email: user?.email }, "-created_date", 100)
+      : await db.entities.AssemblyOrder.list("-created_date", 100);
     setOrders(data);
     setLoading(false);
   };
@@ -45,7 +45,7 @@ export default function AssemblyOrders() {
   const handleCreate = async (form) => {
     setCreating(true);
     const num = "СБ-" + Date.now().toString(36).toUpperCase();
-    await base44.entities.AssemblyOrder.create({
+      await db.entities.AssemblyOrder.create({
       order_number: num,
       client_email: user.email,
       client_name: user.full_name,
@@ -56,7 +56,7 @@ export default function AssemblyOrders() {
       comment: form.comment,
       items: form.items,
     });
-    await base44.entities.ActionLog.create({
+    await db.entities.ActionLog.create({
       user_email: user.email,
       user_name: user.full_name,
       action: "Создан заказ на сборку",
@@ -79,8 +79,8 @@ export default function AssemblyOrders() {
     if (newStatus === "отгружена") {
       updateData.shipped_date = new Date().toISOString();
     }
-    await base44.entities.AssemblyOrder.update(order.id, updateData);
-    await base44.entities.ActionLog.create({
+    await db.entities.AssemblyOrder.update(order.id, updateData);
+    await db.entities.ActionLog.create({
       user_email: user.email,
       user_name: user.full_name,
       action: `Статус заказа изменён на "${newStatus}"`,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { Search, History } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import PageHeader from "../components/wms/PageHeader";
@@ -15,7 +15,7 @@ export default function LogsPage() {
 
   useEffect(() => {
     const load = async () => {
-      const data = await base44.entities.ActionLog.list("-created_date", 200);
+      const data = await db.entities.ActionLog.list("-created_date", 200);
       setLogs(data);
       setLoading(false);
     };

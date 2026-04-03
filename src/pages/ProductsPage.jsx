@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/base44Client";
 import { Plus, Search, Package, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false);
 
   const loadData = async () => {
-    const data = await base44.entities.Product.list("-created_date", 200);
+    const data = await db.entities.Product.list("-created_date", 200);
     setProducts(data);
     setLoading(false);
   };
@@ -45,10 +45,10 @@ export default function ProductsPage() {
     setSaving(true);
     const data = { ...form, weight_kg: form.weight_kg ? parseFloat(form.weight_kg) : undefined };
     if (editing) {
-      await base44.entities.Product.update(editing.id, data);
+      await db.entities.Product.update(editing.id, data);
       toast.success("Товар обновлён");
     } else {
-      await base44.entities.Product.create(data);
+      await db.entities.Product.create(data);
       toast.success("Товар добавлен");
     }
     setSaving(false);
@@ -58,7 +58,7 @@ export default function ProductsPage() {
 
   const handleDelete = async (p) => {
     if (!confirm(`Удалить товар "${p.name}"?`)) return;
-    await base44.entities.Product.delete(p.id);
+    await db.entities.Product.delete(p.id);
     toast.success("Товар удалён");
     loadData();
   };
