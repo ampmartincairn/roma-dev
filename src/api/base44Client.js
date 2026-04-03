@@ -104,6 +104,30 @@ const initializeDb = async () => {
           columns.push('updated_date TEXT DEFAULT CURRENT_TIMESTAMP');
           
           sqliteDb.run(`CREATE TABLE "${table}" (${columns.join(', ')})`);;
+        } else if (table === 'User') {
+          // Migration: Check if User table has username column, if not recreate it
+          try {
+            const userInfo = sqliteDb.exec(`PRAGMA table_info(User)`);
+            const hasUsername = userInfo.length > 0 && userInfo[0].values.some(row => row[1] === 'username');
+            
+            if (!hasUsername) {
+              console.log('Migrating User table to new schema...');
+              sqliteDb.run('DROP TABLE IF EXISTS User_old');
+              sqliteDb.run('ALTER TABLE User RENAME TO User_old');
+              
+              const columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT'];
+              for (const [field, prop] of Object.entries(schema.properties || {})) {
+                columns.push(`"${field}" ${sqlType(prop.type)}`);
+              }
+              columns.push('created_date TEXT DEFAULT CURRENT_TIMESTAMP');
+              columns.push('updated_date TEXT DEFAULT CURRENT_TIMESTAMP');
+              
+              sqliteDb.run(`CREATE TABLE "User" (${columns.join(', ')})`);
+              sqliteDb.run('DROP TABLE User_old');
+            }
+          } catch (e) {
+            console.warn('Could not check User table schema:', e);
+          }
         }
       }
       
@@ -114,8 +138,8 @@ const initializeDb = async () => {
       if (userCount === 0) {
         const now = getTimestamp();
         sqliteDb.run(
-          `INSERT INTO User (email, full_name, role, company_name, created_date, updated_date) VALUES (?, ?, ?, ?, ?, ?)`,
-          ['admin@local', 'Administrator', 'admin', 'Local WMS', now, now]
+          `INSERT INTO User (username, email, password, full_name, role, company_name, created_date, updated_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          ['admin', 'admin@local.dev', 'admin123', 'Administrator', 'admin', 'Local WMS', now, now]
         );
         saveDb();
       }

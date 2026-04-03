@@ -7,12 +7,12 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const initialize = async () => {
       setIsLoadingAuth(true);
       try {
-        // Wait a bit for DB to fully initialize
         let retries = 0;
         while (!db.initialized() && retries < 50) {
           await new Promise(r => setTimeout(r, 100));
@@ -20,8 +20,10 @@ export const AuthProvider = ({ children }) => {
         }
         
         const currentUser = await db.auth.me();
-        setUser(currentUser);
-        setIsAuthenticated(true);
+        if (currentUser) {
+          setUser(currentUser);
+          setIsAuthenticated(true);
+        }
       } catch (error) {
         console.error('Auth initialization failed:', error);
         setUser(null);
@@ -33,10 +35,37 @@ export const AuthProvider = ({ children }) => {
     initialize();
   }, []);
 
+  const login = async (username, password) => {
+    try {
+      setError(null);
+      const user = await db.auth.login(username, password);
+      setUser(user);
+      setIsAuthenticated(true);
+      return user;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const register = async (username, email, password, fullName, role = 'user') => {
+    try {
+      setError(null);
+      const user = await db.auth.register(username, email, password, fullName, role);
+      setUser(user);
+      setIsAuthenticated(true);
+      return user;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
   const logout = () => {
     db.auth.logout();
     setUser(null);
     setIsAuthenticated(false);
+    setError(null);
   };
 
   const navigateToLogin = () => {
@@ -48,6 +77,9 @@ export const AuthProvider = ({ children }) => {
       user,
       isAuthenticated,
       isLoadingAuth,
+      error,
+      login,
+      register,
       logout,
       navigateToLogin
     }}>

@@ -15,9 +15,11 @@ import UsersPage from './pages/UsersPage';
 import StatsPage from './pages/StatsPage';
 import LogsPage from './pages/LogsPage';
 import HistoryPage from './pages/HistoryPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth } = useAuth();
+  const { isLoadingAuth, isAuthenticated } = useAuth();
 
   if (isLoadingAuth) {
     return (
@@ -27,6 +29,16 @@ const AuthenticatedApp = () => {
           <p className="text-muted-foreground">Загрузка...</p>
         </div>
       </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="*" element={<LoginPage />} />
+      </Routes>
     );
   }
 
