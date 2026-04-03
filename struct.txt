@@ -1,0 +1,61 @@
+entities
+	ActionLog.db
+	AssemblyOrder.db
+	Inventory.db
+	Product.db
+	ReceptionRequest.db
+src
+	api
+		base44Client.js
+	components
+		ui
+		wms
+			AssemblyForm.jsx
+			EmptyState.jsx
+			Layout.jsx
+			MarketplaceBadge.jsx
+			PageHeader.jsx
+			PrintDocuments.jsx
+			ReceptionForm.jsx
+			Sidebar.jsx
+			StatsCard.jsx
+			StatusBadge.jsx
+			StatusStepper.jsx
+			TopBar.jsx
+	UserNotRegisteredError.jsx
+	hooks
+		use-mobile.jsx
+	lib
+		app-params.js
+		AuthContext.jsx
+		PageNotFound.jsx
+		query-client.js
+		utils.js
+	pages
+		AssemblyOrders.jsx
+		Dashboard.jsx
+		HistoryPage.jsx
+		InventoryPage.jsx
+		LogsPage.jsx
+		ProductsPage.jsx
+		ReceptionRequests.jsx
+		ShipmentsPage.jsx
+		StatsPage.jsx
+		UsersPage.jsx
+	utils
+		index.ts
+	App.jsx
+	index.css
+	main.jsx
+.gitignore
+components.json
+eslint.config.js
+index.html
+jsconfig.json
+package.json
+postcss.config.js
+README.md
+tailwind.config.js
+vite.config.js
+
+

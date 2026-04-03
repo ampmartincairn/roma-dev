@@ -1,0 +1,44 @@
+{
+  "name": "Inventory",
+  "type": "object",
+  "properties": {
+    "product_name": {
+      "type": "string",
+      "title": "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0442\u043e\u0432\u0430\u0440\u0430"
+    },
+    "sku": {
+      "type": "string",
+      "title": "\u0410\u0440\u0442\u0438\u043a\u0443\u043b"
+    },
+    "client_email": {
+      "type": "string",
+      "title": "Email \u043a\u043b\u0438\u0435\u043d\u0442\u0430"
+    },
+    "warehouse": {
+      "type": "string",
+      "title": "\u0421\u043a\u043b\u0430\u0434",
+      "enum": [
+        "\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0441\u043a\u043b\u0430\u0434",
+        "\u0421\u043a\u043b\u0430\u0434 WB",
+        "\u0421\u043a\u043b\u0430\u0434 Ozon"
+      ]
+    },
+    "quantity": {
+      "type": "number",
+      "title": "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e",
+      "default": 0
+    },
+    "reserved": {
+      "type": "number",
+      "title": "\u0417\u0430\u0440\u0435\u0437\u0435\u0440\u0432\u0438\u0440\u043e\u0432\u0430\u043d\u043e",
+      "default": 0
+    }
+  },
+  "required": [
+    "product_name",
+    "sku",
+    "client_email",
+    "warehouse",
+    "quantity"
+  ]
+}

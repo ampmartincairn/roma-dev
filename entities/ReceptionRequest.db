@@ -1,0 +1,93 @@
+{
+  "name": "ReceptionRequest",
+  "type": "object",
+  "properties": {
+    "request_number": {
+      "type": "string",
+      "title": "\u041d\u043e\u043c\u0435\u0440 \u0437\u0430\u044f\u0432\u043a\u0438"
+    },
+    "client_email": {
+      "type": "string",
+      "title": "Email \u043a\u043b\u0438\u0435\u043d\u0442\u0430"
+    },
+    "client_name": {
+      "type": "string",
+      "title": "\u0418\u043c\u044f \u043a\u043b\u0438\u0435\u043d\u0442\u0430"
+    },
+    "status": {
+      "type": "string",
+      "title": "\u0421\u0442\u0430\u0442\u0443\u0441",
+      "enum": [
+        "\u043d\u043e\u0432\u0430\u044f",
+        "\u0432 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0435",
+        "\u043f\u0440\u0438\u043d\u044f\u0442\u0430",
+        "\u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430"
+      ],
+      "default": "\u043d\u043e\u0432\u0430\u044f"
+    },
+    "items": {
+      "type": "array",
+      "title": "\u0422\u043e\u0432\u0430\u0440\u044b",
+      "items": {
+        "type": "object",
+        "properties": {
+          "product_name": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "expected_qty": {
+            "type": "number"
+          },
+          "received_qty": {
+            "type": "number"
+          },
+          "barcode": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "marketplace": {
+      "type": "string",
+      "title": "\u041c\u0430\u0440\u043a\u0435\u0442\u043f\u043b\u0435\u0439\u0441",
+      "enum": [
+        "WB",
+        "Ozon",
+        "\u0414\u0440\u0443\u0433\u043e\u0435"
+      ]
+    },
+    "warehouse": {
+      "type": "string",
+      "title": "\u0421\u043a\u043b\u0430\u0434",
+      "enum": [
+        "\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0441\u043a\u043b\u0430\u0434",
+        "\u0421\u043a\u043b\u0430\u0434 WB",
+        "\u0421\u043a\u043b\u0430\u0434 Ozon"
+      ]
+    },
+    "comment": {
+      "type": "string",
+      "title": "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439"
+    },
+    "operator_comment": {
+      "type": "string",
+      "title": "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u043e\u043f\u0435\u0440\u0430\u0442\u043e\u0440\u0430"
+    },
+    "processed_by": {
+      "type": "string",
+      "title": "\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0430\u043b"
+    },
+    "processed_date": {
+      "type": "string",
+      "title": "\u0414\u0430\u0442\u0430 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0438"
+    }
+  },
+  "required": [
+    "request_number",
+    "client_email",
+    "status",
+    "marketplace"
+  ]
+}
