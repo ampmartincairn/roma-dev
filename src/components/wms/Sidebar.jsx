@@ -4,7 +4,6 @@ import {
   LayoutDashboard, Package, ClipboardList, PackageCheck, Truck,
   Warehouse, Users, Settings, History, BarChart3, X, LogOut
 } from "lucide-react";
-import { base44 } from "@/api/base44Client";
 
 const NAV_ITEMS = {
   client: [
@@ -99,7 +98,7 @@ export default function Sidebar({ role, isOpen, onClose, user }) {
               </p>
             </div>
             <button
-              onClick={() => base44.auth.logout()}
+              onClick={onLogout}
               className="p-1.5 rounded hover:bg-sidebar-accent text-sidebar-foreground/50 hover:text-white transition-colors"
               title="Выйти"
             >

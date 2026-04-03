@@ -1,6 +1,6 @@
 import * as React from "react";
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon, } from "lucide-react";
-import { cn } from "./utils";
+import { cn } from "@/lib/utils";
 import { buttonVariants } from "./button";
 function Pagination({ className, ...props }) {
     return (<nav role="navigation" aria-label="pagination" data-slot="pagination" className={cn("mx-auto flex w-full justify-center", className)} {...props}/>);
