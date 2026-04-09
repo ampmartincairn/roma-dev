@@ -15,6 +15,9 @@ const ActionLogSchema = JSON.parse(ActionLogSchemaRaw);
 
 const STORAGE_DB_KEY = 'wms_sqlite_db';
 const STORAGE_USER_KEY = 'wms_sqlite_user';
+const STORAGE_DATA_WIPED_KEY = 'wms_sqlite_data_wiped_v1';
+const STORAGE_ALEX_REQUESTS_CLEANED_KEY = 'wms_sqlite_alex_requests_cleaned_v1';
+const STORAGE_FULL_DATA_RESET_KEY = 'wms_sqlite_full_data_reset_v2';
 
 const ENTITY_SCHEMAS = {
   ReceptionRequest: ReceptionRequestSchema,
@@ -31,7 +34,9 @@ const ENTITY_SCHEMAS = {
       password: { type: 'string' },
       full_name: { type: 'string' },
       role: { type: 'string' },
-      company_name: { type: 'string' }
+      company_name: { type: 'string' },
+      is_active: { type: 'boolean' },
+      client_id: { type: 'string' }
     },
     required: ['username', 'password', 'role']
   }
@@ -68,6 +73,13 @@ const parseRecord = (row, schema) => {
       } catch (err) {
         result[key] = row[key];
       }
+    } else if (prop.type === 'boolean') {
+      // Преобразуем числовые значения в булевы, сохраняя null/undefined как undefined
+      if (row[key] === null || row[key] === undefined) {
+        result[key] = undefined;
+      } else {
+        result[key] = Boolean(row[key]);
+      }
     }
   }
   return result;
@@ -90,45 +102,58 @@ const initializeDb = async () => {
       const saved = localStorage.getItem(STORAGE_DB_KEY);
       sqliteDb = saved ? new SqlJs.Database(decode(saved)) : new SqlJs.Database();
 
-      // Create tables
+      // Create tables and migrate schema if needed
       for (const schema of Object.values(ENTITY_SCHEMAS)) {
         const table = schema.name;
         const exists = sqliteDb.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`);
-        
+        const desiredColumns = [];
+
+        for (const [field, prop] of Object.entries(schema.properties || {})) {
+          desiredColumns.push({ field, type: sqlType(prop.type) });
+        }
+        desiredColumns.push({ field: 'created_date', type: 'TEXT DEFAULT CURRENT_TIMESTAMP' });
+        desiredColumns.push({ field: 'updated_date', type: 'TEXT DEFAULT CURRENT_TIMESTAMP' });
+
         if (exists.length === 0) {
           const columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT'];
-          for (const [field, prop] of Object.entries(schema.properties || {})) {
-            columns.push(`"${field}" ${sqlType(prop.type)}`);
+          for (const col of desiredColumns) {
+            columns.push(`"${col.field}" ${col.type}`);
           }
-          columns.push('created_date TEXT DEFAULT CURRENT_TIMESTAMP');
-          columns.push('updated_date TEXT DEFAULT CURRENT_TIMESTAMP');
-          
-          sqliteDb.run(`CREATE TABLE "${table}" (${columns.join(', ')})`);;
-        } else if (table === 'User') {
-          // Migration: Check if User table has username column, if not recreate it
-          try {
-            const userInfo = sqliteDb.exec(`PRAGMA table_info(User)`);
-            const hasUsername = userInfo.length > 0 && userInfo[0].values.some(row => row[1] === 'username');
-            
-            if (!hasUsername) {
-              console.log('Migrating User table to new schema...');
-              sqliteDb.run('DROP TABLE IF EXISTS User_old');
-              sqliteDb.run('ALTER TABLE User RENAME TO User_old');
-              
-              const columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT'];
-              for (const [field, prop] of Object.entries(schema.properties || {})) {
-                columns.push(`"${field}" ${sqlType(prop.type)}`);
-              }
-              columns.push('created_date TEXT DEFAULT CURRENT_TIMESTAMP');
-              columns.push('updated_date TEXT DEFAULT CURRENT_TIMESTAMP');
-              
-              sqliteDb.run(`CREATE TABLE "User" (${columns.join(', ')})`);
-              sqliteDb.run('DROP TABLE User_old');
+          sqliteDb.run(`CREATE TABLE "${table}" (${columns.join(', ')})`);
+        } else {
+          const info = sqliteDb.exec(`PRAGMA table_info("${table}")`);
+          const existingColumns = info.length > 0 ? info[0].values.map((row) => row[1]) : [];
+
+          for (const col of desiredColumns) {
+            if (!existingColumns.includes(col.field)) {
+              sqliteDb.run(`ALTER TABLE "${table}" ADD COLUMN "${col.field}" ${col.type}`);
             }
-          } catch (e) {
-            console.warn('Could not check User table schema:', e);
           }
         }
+      }
+
+      if (!localStorage.getItem(STORAGE_DATA_WIPED_KEY)) {
+        for (const table of ['ReceptionRequest', 'AssemblyOrder', 'Inventory', 'Product']) {
+          sqliteDb.run(`DELETE FROM "${table}"`);
+        }
+        saveDb();
+        localStorage.setItem(STORAGE_DATA_WIPED_KEY, '1');
+      }
+
+      if (!localStorage.getItem(STORAGE_ALEX_REQUESTS_CLEANED_KEY)) {
+        const targetEmail = 'alex@gmail.com';
+        sqliteDb.run(`DELETE FROM "ReceptionRequest" WHERE "client_email" = ?`, [targetEmail]);
+        sqliteDb.run(`DELETE FROM "AssemblyOrder" WHERE "client_email" = ?`, [targetEmail]);
+        saveDb();
+        localStorage.setItem(STORAGE_ALEX_REQUESTS_CLEANED_KEY, '1');
+      }
+
+      if (!localStorage.getItem(STORAGE_FULL_DATA_RESET_KEY)) {
+        for (const table of ['ReceptionRequest', 'AssemblyOrder', 'Inventory', 'Product', 'ActionLog']) {
+          sqliteDb.run(`DELETE FROM "${table}"`);
+        }
+        saveDb();
+        localStorage.setItem(STORAGE_FULL_DATA_RESET_KEY, '1');
       }
       
       // Create default admin user if none exist
@@ -138,8 +163,8 @@ const initializeDb = async () => {
       if (userCount === 0) {
         const now = getTimestamp();
         sqliteDb.run(
-          `INSERT INTO User (username, email, password, full_name, role, company_name, created_date, updated_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          ['admin', 'admin@local.dev', 'admin123', 'Administrator', 'admin', 'Local WMS', now, now]
+          `INSERT INTO User (username, email, password, full_name, role, company_name, is_active, created_date, updated_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ['admin', 'admin@local.dev', 'admin123', 'Administrator', 'admin', 'Local WMS', 1, now, now]
         );
         saveDb();
       }
@@ -304,6 +329,7 @@ export const db = {
     ReceptionRequest: {
       list: (o, l) => executeList('ReceptionRequest', o, l),
       filter: (f, o, l) => executeFilter('ReceptionRequest', f, o, l),
+      get: (i) => executeGetById('ReceptionRequest', i),
       create: (d) => executeCreate('ReceptionRequest', d),
       update: (i, d) => executeUpdate('ReceptionRequest', i, d),
       delete: (i) => executeDelete('ReceptionRequest', i)
@@ -311,6 +337,7 @@ export const db = {
     AssemblyOrder: {
       list: (o, l) => executeList('AssemblyOrder', o, l),
       filter: (f, o, l) => executeFilter('AssemblyOrder', f, o, l),
+      get: (i) => executeGetById('AssemblyOrder', i),
       create: (d) => executeCreate('AssemblyOrder', d),
       update: (i, d) => executeUpdate('AssemblyOrder', i, d),
       delete: (i) => executeDelete('AssemblyOrder', i)
@@ -318,6 +345,7 @@ export const db = {
     Inventory: {
       list: (o, l) => executeList('Inventory', o, l),
       filter: (f, o, l) => executeFilter('Inventory', f, o, l),
+      get: (i) => executeGetById('Inventory', i),
       create: (d) => executeCreate('Inventory', d),
       update: (i, d) => executeUpdate('Inventory', i, d),
       delete: (i) => executeDelete('Inventory', i)
@@ -325,6 +353,7 @@ export const db = {
     Product: {
       list: (o, l) => executeList('Product', o, l),
       filter: (f, o, l) => executeFilter('Product', f, o, l),
+      get: (i) => executeGetById('Product', i),
       create: (d) => executeCreate('Product', d),
       update: (i, d) => executeUpdate('Product', i, d),
       delete: (i) => executeDelete('Product', i)
@@ -332,6 +361,7 @@ export const db = {
     ActionLog: {
       list: (o, l) => executeList('ActionLog', o, l),
       filter: (f, o, l) => executeFilter('ActionLog', f, o, l),
+      get: (i) => executeGetById('ActionLog', i),
       create: (d) => executeCreate('ActionLog', d),
       update: (i, d) => executeUpdate('ActionLog', i, d),
       delete: (i) => executeDelete('ActionLog', i)
@@ -339,6 +369,7 @@ export const db = {
     User: {
       list: (o, l) => executeList('User', o, l),
       filter: (f, o, l) => executeFilter('User', f, o, l),
+      get: (i) => executeGetById('User', i),
       create: (d) => executeCreate('User', d),
       update: (i, d) => executeUpdate('User', i, d),
       delete: (i) => executeDelete('User', i)
@@ -347,15 +378,16 @@ export const db = {
   
   users: {
     inviteUser: async (email, role) => {
+      const normalizedRole = role === 'user' ? 'client' : role;
       const existing = await executeFilter('User', { email: email.toLowerCase() }, '-created_date', 1);
       if (existing.length > 0) {
         const user = existing[0];
-        return await executeUpdate('User', user.id, { role });
+        return await executeUpdate('User', user.id, { role: normalizedRole });
       }
       const user = await executeCreate('User', {
         email: email.toLowerCase(),
         full_name: email.split('@')[0],
-        role,
+        role: normalizedRole,
         company_name: ''
       });
       return user;
@@ -372,13 +404,19 @@ export const db = {
       if (user.password !== password) {
         throw new Error('Неверный пароль');
       }
+      // Проверяем, активен ли пользователь
+      if (user.is_active === false) {
+        throw new Error('Аккаунт заблокирован. Обратитесь к администратору.');
+      }
       const userData = { ...user };
       delete userData.password;
+      if (userData.role === 'user') userData.role = 'client';
       localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(userData));
       return userData;
     },
     
-    register: async (username, email, password, fullName, role = 'user') => {
+    register: async (username, email, password, fullName, companyName = '', role = 'client') => {
+      const normalizedRole = role === 'user' ? 'client' : role;
       const existing = await executeFilter('User', { username: username.toLowerCase() }, '-created_date', 1);
       if (existing.length > 0) {
         throw new Error('Пользователь с таким именем уже существует');
@@ -388,11 +426,13 @@ export const db = {
         email: email.toLowerCase(),
         password: password,
         full_name: fullName,
-        role,
-        company_name: ''
+        role: normalizedRole,
+        company_name: companyName,
+        is_active: false // По умолчанию пользователь неактивен
       });
       const userData = { ...user };
       delete userData.password;
+      if (userData.role === 'user') userData.role = 'client';
       localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(userData));
       return userData;
     },
@@ -400,7 +440,9 @@ export const db = {
     me: async () => {
       const saved = localStorage.getItem(STORAGE_USER_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const user = JSON.parse(saved);
+        if (user.role === 'user') user.role = 'client';
+        return user;
       }
       return null;
     },

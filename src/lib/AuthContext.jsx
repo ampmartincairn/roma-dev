@@ -48,10 +48,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (username, email, password, fullName, role = 'user') => {
+  const register = async (username, email, password, fullName, companyName, role = 'user') => {
     try {
       setError(null);
-      const user = await db.auth.register(username, email, password, fullName, role);
+      const user = await db.auth.register(username, email, password, fullName, companyName, role);
       setUser(user);
       setIsAuthenticated(true);
       return user;

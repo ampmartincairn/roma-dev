@@ -8,6 +8,33 @@ import MarketplaceBadge from "../components/wms/MarketplaceBadge";
 import PageHeader from "../components/wms/PageHeader";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
+const normalizeReceptionStatus = (status) => {
+  const normalized = status?.trim().toLowerCase();
+  const mapping = {
+    "создана": "новая",
+    "отправлена": "новая",
+    "новая": "новая",
+    "в обработке": "взята в работу",
+    "в работе": "взята в работу",
+    "взята в работу": "взята в работу",
+    "принята": "принята",
+    "завершена": "принята",
+    "отменена": "отменена",
+  };
+  return mapping[normalized] || normalized || "новая";
+};
+
+const normalizeOutgoingStatus = (status) => {
+  const normalized = status?.trim().toLowerCase();
+  const mapping = {
+    "в обработке": "взята в работу",
+    "в комплектовке": "собрано",
+    "упакована": "готова к отгрузке",
+    "отгружена": "отгружено",
+  };
+  return mapping[normalized] || normalized || "новая";
+};
+
 export default function Dashboard() {
   const { user, role } = useOutletContext();
   const [receptions, setReceptions] = useState([]);
@@ -47,18 +74,39 @@ export default function Dashboard() {
     );
   }
 
-  const newReceptions = receptions.filter(r => r.status === "новая").length;
-  const inProgressAssemblies = assemblies.filter(a => ["в обработке", "в комплектовке"].includes(a.status)).length;
-  const shippedAssemblies = assemblies.filter(a => a.status === "отгружена").length;
+  const normalizedReceptions = receptions.map((r) => ({
+    ...r,
+    status: normalizeReceptionStatus(r.status),
+  }));
+  const normalizedAssemblies = assemblies.map((a) => ({
+    ...a,
+    status: normalizeOutgoingStatus(a.status),
+  }));
+
+  const newReceptions = normalizedReceptions.filter((r) => r.status === "новая").length;
+  const inProgressAssemblies = normalizedAssemblies.filter((a) => ["взята в работу", "упаковано", "собрано", "готова к отгрузке"].includes(a.status)).length;
+  const shippedAssemblies = normalizedAssemblies.filter((a) => a.status === "отгружено").length;
   const totalInventory = inventory.reduce((sum, i) => sum + (i.quantity || 0), 0);
 
-  const recentReceptions = receptions.slice(0, 5);
-  const recentAssemblies = assemblies.slice(0, 5);
+  const recentReceptions = normalizedReceptions.slice(0, 5);
+  const recentAssemblies = normalizedAssemblies.slice(0, 5);
 
   const chartData = [
-    { name: "Новые", приёмка: receptions.filter(r => r.status === "новая").length, сборка: assemblies.filter(a => a.status === "новая").length },
-    { name: "В работе", приёмка: receptions.filter(r => r.status === "в обработке").length, сборка: assemblies.filter(a => ["в обработке", "в комплектовке"].includes(a.status)).length },
-    { name: "Готово", приёмка: receptions.filter(r => r.status === "принята").length, сборка: assemblies.filter(a => a.status === "упакована").length },
+    {
+      name: "Новые",
+      приёмка: normalizedReceptions.filter((r) => r.status === "новая").length,
+      сборка: normalizedAssemblies.filter((a) => a.status === "новая").length,
+    },
+    {
+      name: "В работе",
+      приёмка: normalizedReceptions.filter((r) => r.status === "взята в работу").length,
+      сборка: normalizedAssemblies.filter((a) => ["взята в работу", "упаковано"].includes(a.status)).length,
+    },
+    {
+      name: "Готово",
+      приёмка: normalizedReceptions.filter((r) => r.status === "принята").length,
+      сборка: normalizedAssemblies.filter((a) => ["собрано", "готова к отгрузке"].includes(a.status)).length,
+    },
     { name: "Отгружено", приёмка: 0, сборка: shippedAssemblies },
   ];
 

@@ -17,6 +17,14 @@ import LogsPage from './pages/LogsPage';
 import HistoryPage from './pages/HistoryPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import IncomingFlowDashboard from './pages/IncomingFlowDashboard';
+import OutgoingFlowDashboard from './pages/OutgoingFlowDashboard';
+import UsersManagement from './pages/UsersManagement';
+import IncomingReceptions from './pages/IncomingReceptions';
+import IncomingReturns from './pages/IncomingReturns';
+import NewReceptionRequest from './pages/NewReceptionRequest';
+import ReceptionRequestDetail from './pages/ReceptionRequestDetail';
+import ErrorBoundary from './lib/ErrorBoundary';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated } = useAuth();
@@ -46,7 +54,26 @@ const AuthenticatedApp = () => {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/incoming-flow" element={<IncomingFlowDashboard />} />
+        <Route path="/incoming-flow/new" element={
+          <ErrorBoundary>
+            <NewReceptionRequest />
+          </ErrorBoundary>
+        } />
+        <Route path="/incoming-flow/:id" element={<ReceptionRequestDetail />} />
+        <Route path="/outgoing-flow" element={<OutgoingFlowDashboard />} />
+        <Route path="/security" element={<UsersManagement />} />
         <Route path="/reception" element={<ReceptionRequests />} />
+        <Route path="/incoming-receptions" element={
+          <ErrorBoundary>
+            <IncomingReceptions />
+          </ErrorBoundary>
+        } />
+        <Route path="/incoming-returns" element={
+          <ErrorBoundary>
+            <IncomingReturns />
+          </ErrorBoundary>
+        } />
         <Route path="/assembly" element={<AssemblyOrders />} />
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/shipments" element={<ShipmentsPage />} />

@@ -22,6 +22,10 @@
       "type": "string",
       "title": "Email \u043a\u043b\u0438\u0435\u043d\u0442\u0430"
     },
+    "client_name": {
+      "type": "string",
+      "title": "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u043a\u043e\u043c\u043f\u0430\u043d\u0438\u0438"
+    },
     "weight_kg": {
       "type": "number",
       "title": "\u0412\u0435\u0441 (\u043a\u0433)"

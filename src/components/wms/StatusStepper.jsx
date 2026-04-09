@@ -2,21 +2,51 @@ import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const RECEPTION_FLOW = ["новая", "в обработке", "принята"];
-const ASSEMBLY_FLOW = ["новая", "в обработке", "в комплектовке", "упакована", "отгружена"];
+const RECEPTION_FLOW = ["новая", "взята в работу", "принята"];
+const ASSEMBLY_FLOW = ["новая", "взята в работу", "упаковано", "собрано", "готова к отгрузке", "отгружено"];
+
+const normalizeAssemblyStatus = (status) => {
+  const normalized = status?.trim().toLowerCase();
+  const mapping = {
+    "в обработке": "взята в работу",
+    "в комплектовке": "собрано",
+    "упакована": "готова к отгрузке",
+    "отгружена": "отгружено",
+  };
+  return mapping[normalized] || normalized || "новая";
+};
+
+const normalizeReceptionStatus = (status) => {
+  const normalized = status?.trim().toLowerCase();
+  const mapping = {
+    "создана": "новая",
+    "отправлена": "новая",
+    "новая": "новая",
+    "в обработке": "взята в работу",
+    "в работе": "взята в работу",
+    "взята в работу": "взята в работу",
+    "принята": "принята",
+    "завершена": "принята",
+    "отменена": "отменена",
+  };
+  return mapping[normalized] || normalized || "новая";
+};
 
 export default function StatusStepper({ status, type = "assembly", onNext, onCancel, loading }) {
   const flow = type === "reception" ? RECEPTION_FLOW : ASSEMBLY_FLOW;
-  const currentIdx = flow.indexOf(status);
-  const isFinished = status === "принята" || status === "отгружена" || status === "отменена";
+  const currentStatus = type === "assembly" ? normalizeAssemblyStatus(status) : normalizeReceptionStatus(status);
+  const currentIdx = flow.indexOf(currentStatus);
+  const isFinished = currentStatus === "принята" || currentStatus === "отгружено" || currentStatus === "отменена";
   const nextStatus = flow[currentIdx + 1];
 
   const ACTION_LABELS = {
-    "в обработке": "▶ Взять в обработку",
-    "в комплектовке": "▶ Начать комплектовку",
-    "упакована": "▶ Отметить упакованным",
-    "отгружена": "▶ Подтвердить отгрузку",
-    "принята": "✓ Принять товар",
+    "новая": "",
+    "взята в работу": "▶ Взять в работу",
+    "упаковано": "▶ Отметить упакованным",
+    "собрано": "▶ Отметить собранным",
+    "готова к отгрузке": "▶ Готова к отгрузке",
+    "отгружено": "▶ Подтвердить отгрузку",
+    "принята": "✓ Принять по факту",
   };
 
   return (
@@ -54,7 +84,7 @@ export default function StatusStepper({ status, type = "assembly", onNext, onCan
             </div>
           );
         })}
-        {status === "отменена" && (
+        {currentStatus === "отменена" && (
           <span className="ml-2 text-xs text-destructive font-medium">✕ Отменена</span>
         )}
       </div>
@@ -67,7 +97,7 @@ export default function StatusStepper({ status, type = "assembly", onNext, onCan
               onClick={() => onNext(nextStatus)}
               disabled={loading}
               className={cn(
-                nextStatus === "принята" || nextStatus === "отгружена"
+                nextStatus === "принята" || nextStatus === "отгружено"
                   ? "bg-wms-success hover:bg-wms-success/90 text-white"
                   : ""
               )}

@@ -17,7 +17,8 @@ export default function RegisterPage() {
     email: '',
     password: '',
     password_confirm: '',
-    full_name: ''
+    full_name: '',
+    company_name: ''
   });
   const [validationError, setValidationError] = useState('');
 
@@ -57,6 +58,10 @@ export default function RegisterPage() {
       setValidationError('Введите полное имя');
       return;
     }
+    if (!formData.company_name.trim()) {
+      setValidationError('Введите название компании');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -65,6 +70,7 @@ export default function RegisterPage() {
         formData.email,
         formData.password,
         formData.full_name,
+        formData.company_name,
         'user'
       );
       navigate('/');
@@ -122,6 +128,19 @@ export default function RegisterPage() {
                 type="text"
                 placeholder="Введите полное имя"
                 value={formData.full_name}
+                onChange={handleChange}
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="company_name">Название компании</Label>
+              <Input
+                id="company_name"
+                name="company_name"
+                type="text"
+                placeholder="Введите название компании"
+                value={formData.company_name}
                 onChange={handleChange}
                 disabled={loading}
               />

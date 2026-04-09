@@ -9,21 +9,26 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [role, setRole] = useState("client");
 
+  const normalizeRole = (role) => {
+    if (role === "user") return "client";
+    if (role === "manager") return "operator";
+    return role;
+  };
+
   useEffect(() => {
-    setRole(user?.role || "client");
+    setRole(normalizeRole(user?.role) || "client");
   }, [user]);
 
   return (
     <div className="min-h-screen bg-background">
       <Sidebar
-        role={role}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         user={user}
         onLogout={logout}
       />
       <div className="lg:pl-64 min-h-screen flex flex-col">
-        <TopBar onMenuClick={() => setSidebarOpen(true)} />
+        <TopBar onMenuClick={() => setSidebarOpen(true)} onLogout={logout} />
         <main className="flex-1 p-4 lg:p-6">
           <Outlet context={{ user, role }} />
         </main>

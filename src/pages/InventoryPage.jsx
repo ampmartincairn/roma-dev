@@ -3,7 +3,6 @@ import { useOutletContext } from "react-router-dom";
 import { db } from "@/api/base44Client";
 import { Search, Warehouse } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PageHeader from "../components/wms/PageHeader";
 import EmptyState from "../components/wms/EmptyState";
 
@@ -12,7 +11,6 @@ export default function InventoryPage() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [warehouseFilter, setWarehouseFilter] = useState("all");
 
   useEffect(() => {
     const load = async () => {
@@ -27,11 +25,9 @@ export default function InventoryPage() {
   }, [user, role]);
 
   const filtered = inventory.filter((i) => {
-    const matchSearch = !search ||
+    return !search ||
       i.product_name?.toLowerCase().includes(search.toLowerCase()) ||
       i.sku?.toLowerCase().includes(search.toLowerCase());
-    const matchWarehouse = warehouseFilter === "all" || i.warehouse === warehouseFilter;
-    return matchSearch && matchWarehouse;
   });
 
   const totalQty = filtered.reduce((s, i) => s + (i.quantity || 0), 0);
@@ -54,17 +50,6 @@ export default function InventoryPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Поиск по товару или артикулу..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
-          <SelectTrigger className="w-full sm:w-52">
-            <Warehouse className="h-4 w-4 mr-2" /><SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Все склады</SelectItem>
-            <SelectItem value="Основной склад">Основной склад</SelectItem>
-            <SelectItem value="Склад WB">Склад WB</SelectItem>
-            <SelectItem value="Склад Ozon">Склад Ozon</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Summary */}
