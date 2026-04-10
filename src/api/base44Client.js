@@ -518,6 +518,80 @@ export const db = {
     redirectToLogin: () => {
       window.location.reload();
     }
+  },
+
+  // Функция для ручного списания товара (админ)
+  adminDeductInventory: async (clientEmail, productName, quantity = 290) => {
+    try {
+      console.log(`🔍 Ищю товар "${productName}" для клиента ${clientEmail}...`);
+      
+      // Находим все товары клиента
+      const allInventory = await executeFilter('Inventory', { client_email: clientEmail }, '-updated_date', 500);
+      
+      if (allInventory.length === 0) {
+        throw new Error(`У клиента ${clientEmail} нет товаров в инвентаре`);
+      }
+
+      // Ищем нужный товар (частичный поиск по названию)
+      const item = allInventory.find(i => 
+        i.product_name && i.product_name.toLowerCase().includes(productName.toLowerCase())
+      );
+
+      if (!item) {
+        console.log(`⚠️  ${productName} не найден. Доступные товары:`);
+        allInventory.forEach((i, idx) => {
+          console.log(`   ${idx + 1}. ${i.product_name} (SKU: ${i.sku}) - Кол-во: ${i.quantity}, Зарезервировано: ${i.reserved}`);
+        });
+        throw new Error(`Товар "${productName}" не найден`);
+      }
+
+      console.log(`✅ Найден товар:`);
+      console.log(`   Название: ${item.product_name}`);
+      console.log(`   SKU: ${item.sku}`);
+      console.log(`   Текущее кол-во: ${item.quantity}`);
+      console.log(`   Зарезервировано: ${item.reserved}`);
+
+      // Списываем товар
+      const newQuantity = Math.max(0, item.quantity - quantity);
+      const newReserved = Math.max(0, item.reserved - quantity);
+
+      console.log(`⏳ Списываю ${quantity} единиц...`);
+      
+      await executeUpdate('Inventory', item.id, {
+        quantity: newQuantity,
+        reserved: newReserved
+      });
+
+      console.log(`✅ ТОВАР СПИСАН!`);
+      console.log(`   Новое кол-во: ${newQuantity}`);
+      console.log(`   Новое зарезервировано: ${newReserved}`);
+
+      // Логируем
+      try {
+        await executeCreate('ActionLog', {
+          user_email: 'admin@local.dev',
+          user_name: 'Система',
+          action: 'Ручное списание товара',
+          entity_type: 'Inventory',
+          details: `${item.product_name} SKU ${item.sku}: списано ${quantity} ед. для ${clientEmail}`
+        });
+        console.log(`✅ Действие залогировано`);
+      } catch (e) {
+        console.warn(`⚠️  Не удалось залогировать действие:`, e.message);
+      }
+
+      return {
+        success: true,
+        product: item.product_name,
+        deducted: quantity,
+        newQuantity: newQuantity,
+        newReserved: newReserved
+      };
+
+    } catch (error) {
+      console.error(`❌ Ошибка при списании:`, error.message);
+      throw error;
+    }
   }
 };
 
