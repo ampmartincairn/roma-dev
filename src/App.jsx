@@ -92,9 +92,11 @@ function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <AuthenticatedApp />
-        </Router>
+        <ErrorBoundary>
+          <Router>
+            <AuthenticatedApp />
+          </Router>
+        </ErrorBoundary>
         <Toaster />
       </QueryClientProvider>
     </AuthProvider>
