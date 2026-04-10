@@ -93,18 +93,19 @@ function createCode128Svg(value) {
 }
 
 export function PrintProductLabels({ items, orderId }) {
-  const labelsHtml = items.map((item) => {
+  const labelsHtml = items.flatMap((item) => {
     const barcodeValue = item.barcode || item.product_barcode || item.sku || item.product_name || "NO-BARCODE";
+    const quantity = Math.max(1, Number(item.quantity || item.expected_qty || 1));
 
-    return `
+    return Array.from({ length: quantity }, (_, index) => `
     <div class="label">
       <div class="sku">${item.sku || "—"}</div>
       <div class="barcode-svg">${createCode128Svg(barcodeValue)}</div>
       <div class="barcode-area">${barcodeValue}</div>
       <div class="name">${item.product_name || "Товар"}</div>
-      <div class="barcode-num">Заказ: ${orderId} | Кол-во: ${item.quantity || item.expected_qty || 1} шт.</div>
+      <div class="barcode-num">Заказ: ${orderId} | Этикетка ${index + 1}/${quantity}</div>
     </div>
-  `;
+  `);
   }).join("");
 
   const html = `
