@@ -595,4 +595,9 @@ export const db = {
   }
 };
 
+// Сделать db доступным в консоли браузера для admin функций
+if (typeof window !== 'undefined') {
+  window.db = db;
+}
+
 
