@@ -148,7 +148,6 @@ export default function ReceptionRequestDetail() {
   const totalAcceptedWeight = (request.items || []).reduce((sum, item) => {
     return sum + getTotalItemWeight(item);
   }, 0);
-  const hideMarketplaceAndWarehouse = isInProgressStatus(request.status);
 
   return (
     <div className="space-y-6">
@@ -195,22 +194,6 @@ export default function ReceptionRequestDetail() {
                 <p className="text-muted-foreground text-xs">Клиент</p>
                 <p className="font-medium">{request.client_name || request.client_email || "-"}</p>
               </div>
-              {!hideMarketplaceAndWarehouse && (
-                <div>
-                  <p className="text-muted-foreground text-xs">Маркетплейс</p>
-                  <p className="font-medium">{request.marketplace || "-"}</p>
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {!hideMarketplaceAndWarehouse ? (
-                <div>
-                  <p className="text-muted-foreground text-xs">Склад</p>
-                  <p className="font-medium">{request.warehouse || "-"}</p>
-                </div>
-              ) : (
-                <div />
-              )}
               <div>
                 <p className="text-muted-foreground text-xs">Создал</p>
                 <p className="font-medium">{request.client_name || request.client_email || "-"}</p>
