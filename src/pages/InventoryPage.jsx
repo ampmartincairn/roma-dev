@@ -63,6 +63,11 @@ export default function InventoryPage() {
   };
 
   const handleDeleteInventoryItem = async () => {
+    if (role !== "admin") {
+      toast.error("Удаление доступно только администратору");
+      return;
+    }
+
     if (!itemToDelete) return;
 
     if (deletePassword !== DELETE_INVENTORY_PASSWORD) {
@@ -144,7 +149,7 @@ export default function InventoryPage() {
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Кол-во</th>
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Резерв</th>
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Доступно</th>
-                  {role !== "client" && <th className="text-right py-3 px-4 font-medium text-muted-foreground">Действия</th>}
+                  {role === "admin" && <th className="text-right py-3 px-4 font-medium text-muted-foreground">Действия</th>}
                 </tr>
               </thead>
               <tbody>
@@ -157,7 +162,7 @@ export default function InventoryPage() {
                     <td className="py-3 px-4 text-right font-medium">{i.quantity}</td>
                     <td className="py-3 px-4 text-right text-wms-warning font-medium">{i.reserved || 0}</td>
                     <td className="py-3 px-4 text-right text-wms-success font-bold">{(i.quantity || 0) - (i.reserved || 0)}</td>
-                    {role !== "client" && (
+                    {role === "admin" && (
                       <td className="py-3 px-4 text-right">
                         <Button
                           variant="destructive"
