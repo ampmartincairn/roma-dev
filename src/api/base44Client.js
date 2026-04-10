@@ -139,12 +139,19 @@ const initializeDb = async () => {
         const table = schema.name;
         const exists = sqliteDb.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`);
         const desiredColumns = [];
+        const seenColumns = new Set();
+
+        const pushColumn = (field, type) => {
+          if (seenColumns.has(field)) return;
+          seenColumns.add(field);
+          desiredColumns.push({ field, type });
+        };
 
         for (const [field, prop] of Object.entries(schema.properties || {})) {
-          desiredColumns.push({ field, type: sqlType(prop.type) });
+          pushColumn(field, sqlType(prop.type));
         }
-        desiredColumns.push({ field: 'created_date', type: 'TEXT DEFAULT CURRENT_TIMESTAMP' });
-        desiredColumns.push({ field: 'updated_date', type: 'TEXT DEFAULT CURRENT_TIMESTAMP' });
+        pushColumn('created_date', 'TEXT DEFAULT CURRENT_TIMESTAMP');
+        pushColumn('updated_date', 'TEXT DEFAULT CURRENT_TIMESTAMP');
 
         if (exists.length === 0) {
           const columns = ['id INTEGER PRIMARY KEY AUTOINCREMENT'];
@@ -154,11 +161,12 @@ const initializeDb = async () => {
           sqliteDb.run(`CREATE TABLE "${table}" (${columns.join(', ')})`);
         } else {
           const info = sqliteDb.exec(`PRAGMA table_info("${table}")`);
-          const existingColumns = info.length > 0 ? info[0].values.map((row) => row[1]) : [];
+          const existingColumns = new Set(info.length > 0 ? info[0].values.map((row) => row[1]) : []);
 
           for (const col of desiredColumns) {
-            if (!existingColumns.includes(col.field)) {
+            if (!existingColumns.has(col.field)) {
               sqliteDb.run(`ALTER TABLE "${table}" ADD COLUMN "${col.field}" ${col.type}`);
+              existingColumns.add(col.field);
             }
           }
         }
