@@ -1,16 +1,30 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import { db } from "@/api/base44Client";
-import { Search, Warehouse } from "lucide-react";
+import { Search, Warehouse, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import PageHeader from "../components/wms/PageHeader";
 import EmptyState from "../components/wms/EmptyState";
+import { toast } from "sonner";
 
 export default function InventoryPage() {
   const { user, role } = useOutletContext();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
+  const [itemToDelete, setItemToDelete] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -32,6 +46,22 @@ export default function InventoryPage() {
 
   const totalQty = filtered.reduce((s, i) => s + (i.quantity || 0), 0);
   const totalReserved = filtered.reduce((s, i) => s + (i.reserved || 0), 0);
+
+  const handleDeleteInventoryItem = async () => {
+    if (!itemToDelete) return;
+    setDeletingId(itemToDelete.id);
+    try {
+      await db.entities.Inventory.delete(itemToDelete.id);
+      setInventory((prev) => prev.filter((row) => row.id !== itemToDelete.id));
+      toast.success("Позиция удалена из складских остатков");
+      setItemToDelete(null);
+    } catch (error) {
+      console.error("Error deleting inventory item:", error);
+      toast.error("Не удалось удалить позицию");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -83,6 +113,7 @@ export default function InventoryPage() {
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Кол-во</th>
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Резерв</th>
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Доступно</th>
+                  <th className="text-right py-3 px-4 font-medium text-muted-foreground">Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -95,6 +126,18 @@ export default function InventoryPage() {
                     <td className="py-3 px-4 text-right font-medium">{i.quantity}</td>
                     <td className="py-3 px-4 text-right text-wms-warning font-medium">{i.reserved || 0}</td>
                     <td className="py-3 px-4 text-right text-wms-success font-bold">{(i.quantity || 0) - (i.reserved || 0)}</td>
+                    <td className="py-3 px-4 text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        disabled={deletingId === i.id}
+                        onClick={() => setItemToDelete(i)}
+                        title="Удалить позицию"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -102,6 +145,31 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить позицию из остатков?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Будет удалена позиция {itemToDelete?.product_name || "товара"} (SKU: {itemToDelete?.sku || "—"}).
+              Это действие нельзя отменить.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingId}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!!deletingId}
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteInventoryItem();
+              }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deletingId ? "Удаление..." : "Удалить"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
