@@ -69,6 +69,72 @@ const isAllowedOutgoingStatus = (status) => [
   "отменена",
 ].includes(normalizeOutgoingStatus(status));
 
+// Резервирует товары при создании заявки
+const reserveInventoryForOrder = async (order) => {
+  const requestedBySku = (order.items || []).reduce((acc, item) => {
+    if (!item?.sku) return acc;
+    acc[item.sku] = (acc[item.sku] || 0) + Number(item.quantity || 0);
+    return acc;
+  }, {});
+
+  for (const [sku, requested] of Object.entries(requestedBySku)) {
+    let remaining = Number(requested || 0);
+    const inventoryRows = await db.entities.Inventory.filter(
+      { client_email: order.client_email, sku },
+      "-updated_date",
+      500
+    );
+
+    for (const row of inventoryRows) {
+      if (remaining <= 0) break;
+
+      const currentQty = Number(row.quantity || 0);
+      const currentReserved = Number(row.reserved || 0);
+      const free = Math.max(0, currentQty - currentReserved);
+      
+      if (free <= 0) continue;
+
+      const toReserve = Math.min(free, remaining);
+      await db.entities.Inventory.update(row.id, {
+        reserved: currentReserved + toReserve,
+      });
+      remaining -= toReserve;
+    }
+  }
+};
+
+// Освобождает резервирование при отмене заявки
+const releaseReservationForOrder = async (order) => {
+  const requestedBySku = (order.items || []).reduce((acc, item) => {
+    if (!item?.sku) return acc;
+    acc[item.sku] = (acc[item.sku] || 0) + Number(item.quantity || 0);
+    return acc;
+  }, {});
+
+  for (const [sku, requested] of Object.entries(requestedBySku)) {
+    let remaining = Number(requested || 0);
+    const inventoryRows = await db.entities.Inventory.filter(
+      { client_email: order.client_email, sku },
+      "-updated_date",
+      500
+    );
+
+    for (const row of inventoryRows) {
+      if (remaining <= 0) break;
+
+      const currentReserved = Number(row.reserved || 0);
+      if (currentReserved <= 0) continue;
+
+      const toRelease = Math.min(currentReserved, remaining);
+      await db.entities.Inventory.update(row.id, {
+        reserved: currentReserved - toRelease,
+      });
+      remaining -= toRelease;
+    }
+  }
+};
+
+// Списывает товары при отгрузке (уменьшает quantity и reserved)
 const deductShippedItemsFromInventory = async (order) => {
   const requestedBySku = (order.items || []).reduce((acc, item) => {
     if (!item?.sku) return acc;
@@ -93,11 +159,16 @@ const deductShippedItemsFromInventory = async (order) => {
       if (remaining <= 0) break;
 
       const currentQty = Number(row.quantity || 0);
+      const currentReserved = Number(row.reserved || 0);
+      
       if (currentQty <= 0) continue;
 
       const deducted = Math.min(currentQty, remaining);
+      const releaseReserved = Math.min(deducted, currentReserved);
+      
       await db.entities.Inventory.update(row.id, {
         quantity: currentQty - deducted,
+        reserved: Math.max(0, currentReserved - releaseReserved),
       });
       remaining -= deducted;
     }
@@ -311,6 +382,17 @@ export default function ShipmentsPage() {
         items,
       });
 
+      // Резервируем товары для новой заявки
+      const newOrder = (await db.entities.AssemblyOrder.filter(
+        { client_email: user?.email, order_number: form.order_number },
+        "-created_date",
+        1
+      ))[0];
+      
+      if (newOrder) {
+        await reserveInventoryForOrder(newOrder);
+      }
+
       await db.entities.ActionLog.create({
         user_email: user?.email,
         user_name: user?.full_name,
@@ -346,6 +428,12 @@ export default function ShipmentsPage() {
       const freshOrder = await db.entities.AssemblyOrder.get(order.id);
       const wasAlreadyShipped = normalizeOutgoingStatus(freshOrder?.status) === "отгружено";
 
+      // Если отмена заявки (и она ещё не отгружена) - освобождаем резервирование
+      if (newStatus === "отменена" && !wasAlreadyShipped) {
+        await releaseReservationForOrder(freshOrder || order);
+      }
+
+      // Если отгрузка (и она ещё не отгружена) - списываем товары со склада
       if (newStatus === "отгружено" && !wasAlreadyShipped) {
         await deductShippedItemsFromInventory(freshOrder || order);
       }
@@ -381,6 +469,10 @@ export default function ShipmentsPage() {
         ? ["новая", "взята в работу", "упаковано", "собрано", "готова к отгрузке", "отгружено"]
         : ["новая", "взята в работу", "упаковано", "собрано", "готова к отгрузке", "отгружено", "отменена"];
       setOrders(normalizedAll.filter((item) => allowedStatuses.includes(item.status)));
+
+      // Обновляем инвентарь в UI
+      const inventory = await db.entities.Inventory.filter({ client_email: user?.email }, "-updated_date", 1000);
+      setClientInventory(inventory);
     } catch (error) {
       console.error("Error updating shipment status:", error);
       toast.error("Не удалось обновить статус");

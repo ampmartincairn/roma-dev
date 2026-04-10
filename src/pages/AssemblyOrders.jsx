@@ -17,6 +17,112 @@ import StatusStepper from "../components/wms/StatusStepper";
 import PrintDocumentsMenu from "../components/wms/PrintDocuments";
 import { toast } from "sonner";
 
+// Резервирует товары при создании заявки
+const reserveInventoryForOrder = async (order) => {
+  const requestedBySku = (order.items || []).reduce((acc, item) => {
+    if (!item?.sku) return acc;
+    acc[item.sku] = (acc[item.sku] || 0) + Number(item.quantity || 0);
+    return acc;
+  }, {});
+
+  for (const [sku, requested] of Object.entries(requestedBySku)) {
+    let remaining = Number(requested || 0);
+    const inventoryRows = await db.entities.Inventory.filter(
+      { client_email: order.client_email, sku },
+      "-updated_date",
+      500
+    );
+
+    for (const row of inventoryRows) {
+      if (remaining <= 0) break;
+
+      const currentQty = Number(row.quantity || 0);
+      const currentReserved = Number(row.reserved || 0);
+      const free = Math.max(0, currentQty - currentReserved);
+      
+      if (free <= 0) continue;
+
+      const toReserve = Math.min(free, remaining);
+      await db.entities.Inventory.update(row.id, {
+        reserved: currentReserved + toReserve,
+      });
+      remaining -= toReserve;
+    }
+  }
+};
+
+// Освобождает резервирование при отмене заявки
+const releaseReservationForOrder = async (order) => {
+  const requestedBySku = (order.items || []).reduce((acc, item) => {
+    if (!item?.sku) return acc;
+    acc[item.sku] = (acc[item.sku] || 0) + Number(item.quantity || 0);
+    return acc;
+  }, {});
+
+  for (const [sku, requested] of Object.entries(requestedBySku)) {
+    let remaining = Number(requested || 0);
+    const inventoryRows = await db.entities.Inventory.filter(
+      { client_email: order.client_email, sku },
+      "-updated_date",
+      500
+    );
+
+    for (const row of inventoryRows) {
+      if (remaining <= 0) break;
+
+      const currentReserved = Number(row.reserved || 0);
+      if (currentReserved <= 0) continue;
+
+      const toRelease = Math.min(currentReserved, remaining);
+      await db.entities.Inventory.update(row.id, {
+        reserved: currentReserved - toRelease,
+      });
+      remaining -= toRelease;
+    }
+  }
+};
+
+// Списывает товары при отгрузке (уменьшает quantity и reserved)
+const deductShippedItemsFromInventory = async (order) => {
+  const requestedBySku = (order.items || []).reduce((acc, item) => {
+    if (!item?.sku) return acc;
+    acc[item.sku] = (acc[item.sku] || 0) + Number(item.quantity || 0);
+    return acc;
+  }, {});
+
+  for (const [sku, requested] of Object.entries(requestedBySku)) {
+    let remaining = Number(requested || 0);
+    const inventoryRows = await db.entities.Inventory.filter(
+      { client_email: order.client_email, sku },
+      "-updated_date",
+      500
+    );
+
+    const totalAvailable = inventoryRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+    if (totalAvailable < remaining) {
+      throw new Error(`Недостаточно остатка для списания SKU ${sku}`);
+    }
+
+    for (const row of inventoryRows) {
+      if (remaining <= 0) break;
+
+      const currentQty = Number(row.quantity || 0);
+      const currentReserved = Number(row.reserved || 0);
+      
+      if (currentQty <= 0) continue;
+
+      const deducted = Math.min(currentQty, remaining);
+      const releaseReserved = Math.min(deducted, currentReserved);
+      
+      await db.entities.Inventory.update(row.id, {
+        quantity: currentQty - deducted,
+        reserved: Math.max(0, currentReserved - releaseReserved),
+      });
+      remaining -= deducted;
+    }
+  }
+};
+
 export default function AssemblyOrders() {
   const { user, role } = useOutletContext();
   const [orders, setOrders] = useState([]);
@@ -45,53 +151,90 @@ export default function AssemblyOrders() {
   const handleCreate = async (form) => {
     setCreating(true);
     const num = "СБ-" + Date.now().toString(36).toUpperCase();
+    try {
       await db.entities.AssemblyOrder.create({
-      order_number: num,
-      client_email: user.email,
-      client_name: user.full_name,
-      status: "новая",
-      marketplace: form.marketplace,
-      destination_warehouse: form.destination_warehouse,
-      packaging_type: form.packaging_type,
-      comment: form.comment,
-      items: form.items,
-    });
-    await db.entities.ActionLog.create({
-      user_email: user.email,
-      user_name: user.full_name,
-      action: "Создан заказ на сборку",
-      entity_type: "AssemblyOrder",
-      details: `Номер: ${num}`,
-    });
-    toast.success("Заказ на сборку создан");
-    setShowCreate(false);
-    setCreating(false);
-    loadData();
+        order_number: num,
+        client_email: user.email,
+        client_name: user.full_name,
+        status: "новая",
+        marketplace: form.marketplace,
+        destination_warehouse: form.destination_warehouse,
+        packaging_type: form.packaging_type,
+        comment: form.comment,
+        items: form.items,
+      });
+
+      // Резервируем товары для нового заказа
+      const newOrder = (await db.entities.AssemblyOrder.filter(
+        { client_email: user.email, order_number: num },
+        "-created_date",
+        1
+      ))[0];
+      
+      if (newOrder) {
+        await reserveInventoryForOrder(newOrder);
+      }
+
+      await db.entities.ActionLog.create({
+        user_email: user.email,
+        user_name: user.full_name,
+        action: "Создан заказ на сборку",
+        entity_type: "AssemblyOrder",
+        details: `Номер: ${num}`,
+      });
+      toast.success("Заказ на сборку создан");
+      setShowCreate(false);
+    } catch (error) {
+      console.error("Error creating assembly order:", error);
+      toast.error("Не удалось создать заказ");
+    } finally {
+      setCreating(false);
+      loadData();
+    }
   };
 
   const handleStatusChange = async (order, newStatus) => {
     setActionLoading(true);
-    const updateData = {
-      status: newStatus,
-      operator_comment: operatorComment || order.operator_comment,
-      processed_by: user.email,
-    };
-    if (newStatus === "отгружена") {
-      updateData.shipped_date = new Date().toISOString();
+    try {
+      const freshOrder = await db.entities.AssemblyOrder.get(order.id);
+      const wasAlreadyShipped = freshOrder?.status === "отгружена";
+
+      // Если отмена заявки (и она ещё не отгружена) - освобождаем резервирование
+      if (newStatus === "отменена" && !wasAlreadyShipped) {
+        await releaseReservationForOrder(freshOrder || order);
+      }
+
+      // Если отгрузка (и она ещё не отгружена) - списываем товары со склада
+      if (newStatus === "отгружена" && !wasAlreadyShipped) {
+        await deductShippedItemsFromInventory(freshOrder || order);
+      }
+
+      const updateData = {
+        status: newStatus,
+        operator_comment: operatorComment || order.operator_comment,
+        processed_by: user.email,
+      };
+      if (newStatus === "отгружена") {
+        updateData.shipped_date = new Date().toISOString();
+      }
+      await db.entities.AssemblyOrder.update(order.id, updateData);
+      await db.entities.ActionLog.create({
+        user_email: user.email,
+        user_name: user.full_name,
+        action: `Статус заказа изменён на "${newStatus}"`,
+        entity_type: "AssemblyOrder",
+        entity_id: order.id,
+        details: `Заказ ${order.order_number}`,
+      });
+      toast.success(`Статус: "${newStatus}"`);
+      setActionLoading(false);
+      setSelectedOrder(prev => ({ ...prev, ...updateData }));
+      loadData();
+    } catch (error) {
+      console.error("Error updating assembly order status:", error);
+      toast.error("Не удалось обновить статус");
+      setActionLoading(false);
     }
-    await db.entities.AssemblyOrder.update(order.id, updateData);
-    await db.entities.ActionLog.create({
-      user_email: user.email,
-      user_name: user.full_name,
-      action: `Статус заказа изменён на "${newStatus}"`,
-      entity_type: "AssemblyOrder",
-      entity_id: order.id,
-      details: `Заказ ${order.order_number}`,
-    });
-    toast.success(`Статус: "${newStatus}"`);
-    setActionLoading(false);
-    setSelectedOrder(prev => ({ ...prev, ...updateData }));
-    loadData();
   };
 
   const filtered = orders.filter((o) => {
