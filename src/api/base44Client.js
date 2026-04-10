@@ -87,6 +87,9 @@ const decode = (str) => Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
 
 const getTimestamp = () => new Date().toISOString();
 
+const isMissingUserTableError = (error) =>
+  String(error?.message || error).toLowerCase().includes('no such table: user');
+
 const inferValue = (v) => {
   if (v === null || v === undefined) return null;
   if (typeof v === 'object') return JSON.stringify(v);
@@ -205,7 +208,22 @@ const getDb = async () => {
   if (!sqliteDb) {
     await initializeDb();
   }
-  ensureUserTableAndSeed(sqliteDb);
+  try {
+    ensureUserTableAndSeed(sqliteDb);
+  } catch (error) {
+    // Recover from broken persisted DB state in browser storage.
+    if (!isMissingUserTableError(error)) {
+      throw error;
+    }
+
+    console.warn('Detected broken local DB state. Recreating local SQLite storage.', error);
+    localStorage.removeItem(STORAGE_DB_KEY);
+    sqliteDb = null;
+    initPromise = null;
+
+    await initializeDb();
+    ensureUserTableAndSeed(sqliteDb);
+  }
   return sqliteDb;
 };
 
@@ -419,7 +437,22 @@ export const db = {
   
   auth: {
     login: async (username, password) => {
-      const users = await executeFilter('User', { username: username.toLowerCase() }, '-created_date', 1);
+      let users;
+      try {
+        users = await executeFilter('User', { username: username.toLowerCase() }, '-created_date', 1);
+      } catch (error) {
+        if (!isMissingUserTableError(error)) {
+          throw error;
+        }
+
+        console.warn('User table missing during login. Rebuilding local DB and retrying once.');
+        localStorage.removeItem(STORAGE_DB_KEY);
+        sqliteDb = null;
+        initPromise = null;
+        await initializeDb();
+        users = await executeFilter('User', { username: username.toLowerCase() }, '-created_date', 1);
+      }
+
       if (users.length === 0) {
         throw new Error('Пользователь не найден');
       }
