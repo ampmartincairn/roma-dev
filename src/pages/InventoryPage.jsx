@@ -1,30 +1,32 @@
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import { db } from "@/api/base44Client";
-import { Search, Warehouse, Trash2 } from "lucide-react";
+import { Search, Trash2, Warehouse } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import PageHeader from "../components/wms/PageHeader";
 import EmptyState from "../components/wms/EmptyState";
 import { toast } from "sonner";
+
+const DELETE_INVENTORY_PASSWORD = "4991693600Gg";
 
 export default function InventoryPage() {
   const { user, role } = useOutletContext();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [deletingId, setDeletingId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [deletePassword, setDeletePassword] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -47,19 +49,48 @@ export default function InventoryPage() {
   const totalQty = filtered.reduce((s, i) => s + (i.quantity || 0), 0);
   const totalReserved = filtered.reduce((s, i) => s + (i.reserved || 0), 0);
 
+  const openDeleteDialog = (item) => {
+    setItemToDelete(item);
+    setDeletePassword("");
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleting) return;
+    setDeleteDialogOpen(false);
+    setItemToDelete(null);
+    setDeletePassword("");
+  };
+
   const handleDeleteInventoryItem = async () => {
     if (!itemToDelete) return;
-    setDeletingId(itemToDelete.id);
+
+    if (deletePassword !== DELETE_INVENTORY_PASSWORD) {
+      toast.error("Неверный пароль подтверждения");
+      return;
+    }
+
+    setDeleting(true);
     try {
       await db.entities.Inventory.delete(itemToDelete.id);
+
+      await db.entities.ActionLog.create({
+        user_email: user?.email,
+        user_name: user?.full_name,
+        action: "Удалена позиция из складских остатков",
+        entity_type: "Inventory",
+        entity_id: String(itemToDelete.id),
+        details: `${itemToDelete.product_name} (SKU ${itemToDelete.sku}), клиент ${itemToDelete.client_email}`,
+      });
+
       setInventory((prev) => prev.filter((row) => row.id !== itemToDelete.id));
-      toast.success("Позиция удалена из складских остатков");
-      setItemToDelete(null);
+      toast.success("Позиция удалена");
+      closeDeleteDialog();
     } catch (error) {
       console.error("Error deleting inventory item:", error);
       toast.error("Не удалось удалить позицию");
     } finally {
-      setDeletingId(null);
+      setDeleting(false);
     }
   };
 
@@ -113,7 +144,7 @@ export default function InventoryPage() {
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Кол-во</th>
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Резерв</th>
                   <th className="text-right py-3 px-4 font-medium text-muted-foreground">Доступно</th>
-                  <th className="text-right py-3 px-4 font-medium text-muted-foreground">Действия</th>
+                  {role !== "client" && <th className="text-right py-3 px-4 font-medium text-muted-foreground">Действия</th>}
                 </tr>
               </thead>
               <tbody>
@@ -126,18 +157,18 @@ export default function InventoryPage() {
                     <td className="py-3 px-4 text-right font-medium">{i.quantity}</td>
                     <td className="py-3 px-4 text-right text-wms-warning font-medium">{i.reserved || 0}</td>
                     <td className="py-3 px-4 text-right text-wms-success font-bold">{(i.quantity || 0) - (i.reserved || 0)}</td>
-                    <td className="py-3 px-4 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive"
-                        disabled={deletingId === i.id}
-                        onClick={() => setItemToDelete(i)}
-                        title="Удалить позицию"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
+                    {role !== "client" && (
+                      <td className="py-3 px-4 text-right">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => openDeleteDialog(i)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Удалить
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -146,30 +177,43 @@ export default function InventoryPage() {
         </div>
       )}
 
-      <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Удалить позицию из остатков?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Будет удалена позиция {itemToDelete?.product_name || "товара"} (SKU: {itemToDelete?.sku || "—"}).
-              Это действие нельзя отменить.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={!!deletingId}>Отмена</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={!!deletingId}
-              onClick={(e) => {
-                e.preventDefault();
-                handleDeleteInventoryItem();
-              }}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              {deletingId ? "Удаление..." : "Удалить"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Dialog open={deleteDialogOpen} onOpenChange={closeDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Подтвердите удаление</DialogTitle>
+            <DialogDescription>
+              Для удаления позиции введите пароль подтверждения.
+            </DialogDescription>
+          </DialogHeader>
+
+          {itemToDelete && (
+            <div className="text-sm rounded-lg border bg-muted/40 p-3 space-y-1">
+              <p className="font-medium">{itemToDelete.product_name}</p>
+              <p className="text-muted-foreground">SKU: {itemToDelete.sku}</p>
+              <p className="text-muted-foreground">Клиент: {itemToDelete.client_email}</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Пароль подтверждения</p>
+            <Input
+              type="password"
+              placeholder="Введите пароль"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDeleteDialog} disabled={deleting}>
+              Отмена
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteInventoryItem} disabled={deleting}>
+              {deleting ? "Удаление..." : "Удалить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
