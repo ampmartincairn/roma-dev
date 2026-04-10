@@ -46,6 +46,35 @@ let SqlJs;
 let sqliteDb;
 let initPromise;
 
+const ensureUserTableAndSeed = (db) => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS "User" (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      "username" TEXT,
+      "email" TEXT,
+      "password" TEXT,
+      "full_name" TEXT,
+      "role" TEXT,
+      "company_name" TEXT,
+      "is_active" INTEGER,
+      "client_id" TEXT,
+      "created_date" TEXT DEFAULT CURRENT_TIMESTAMP,
+      "updated_date" TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  const userExists = db.exec('SELECT COUNT(*) as cnt FROM "User"');
+  const userCount = userExists[0]?.values[0]?.[0] || 0;
+
+  if (userCount === 0) {
+    const now = getTimestamp();
+    db.run(
+      `INSERT INTO "User" (username, email, password, full_name, role, company_name, is_active, created_date, updated_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['admin', 'admin@local.dev', 'admin123', 'Administrator', 'admin', 'Local WMS', 1, now, now]
+    );
+  }
+};
+
 const sqlType = (schemaType) => {
   if (schemaType === 'number') return 'REAL';
   if (schemaType === 'boolean') return 'INTEGER';
@@ -156,22 +185,15 @@ const initializeDb = async () => {
         localStorage.setItem(STORAGE_FULL_DATA_RESET_KEY, '1');
       }
       
-      // Create default admin user if none exist
-      const userExists = sqliteDb.exec('SELECT COUNT(*) as cnt FROM User');
-      const userCount = userExists[0]?.values[0]?.[0] || 0;
-      
-      if (userCount === 0) {
-        const now = getTimestamp();
-        sqliteDb.run(
-          `INSERT INTO User (username, email, password, full_name, role, company_name, is_active, created_date, updated_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          ['admin', 'admin@local.dev', 'admin123', 'Administrator', 'admin', 'Local WMS', 1, now, now]
-        );
-        saveDb();
-      }
+      ensureUserTableAndSeed(sqliteDb);
+      saveDb();
       
       return sqliteDb;
     } catch (error) {
       console.error('DB initialization failed:', error);
+      // Reset state so next operation can retry clean initialization.
+      sqliteDb = null;
+      initPromise = null;
       throw error;
     }
   })();
@@ -183,6 +205,7 @@ const getDb = async () => {
   if (!sqliteDb) {
     await initializeDb();
   }
+  ensureUserTableAndSeed(sqliteDb);
   return sqliteDb;
 };
 
