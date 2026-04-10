@@ -69,6 +69,41 @@ const isAllowedOutgoingStatus = (status) => [
   "отменена",
 ].includes(normalizeOutgoingStatus(status));
 
+const deductShippedItemsFromInventory = async (order) => {
+  const requestedBySku = (order.items || []).reduce((acc, item) => {
+    if (!item?.sku) return acc;
+    acc[item.sku] = (acc[item.sku] || 0) + Number(item.quantity || 0);
+    return acc;
+  }, {});
+
+  for (const [sku, requested] of Object.entries(requestedBySku)) {
+    let remaining = Number(requested || 0);
+    const inventoryRows = await db.entities.Inventory.filter(
+      { client_email: order.client_email, sku },
+      "-updated_date",
+      500
+    );
+
+    const totalAvailable = inventoryRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+    if (totalAvailable < remaining) {
+      throw new Error(`Недостаточно остатка для списания SKU ${sku}`);
+    }
+
+    for (const row of inventoryRows) {
+      if (remaining <= 0) break;
+
+      const currentQty = Number(row.quantity || 0);
+      if (currentQty <= 0) continue;
+
+      const deducted = Math.min(currentQty, remaining);
+      await db.entities.Inventory.update(row.id, {
+        quantity: currentQty - deducted,
+      });
+      remaining -= deducted;
+    }
+  }
+};
+
 export default function ShipmentsPage() {
   const { user, role } = useOutletContext();
   const isClient = role === "client";
@@ -309,6 +344,11 @@ export default function ShipmentsPage() {
     setActionLoading(true);
     try {
       const freshOrder = await db.entities.AssemblyOrder.get(order.id);
+      const wasAlreadyShipped = normalizeOutgoingStatus(freshOrder?.status) === "отгружено";
+
+      if (newStatus === "отгружено" && !wasAlreadyShipped) {
+        await deductShippedItemsFromInventory(freshOrder || order);
+      }
 
       const updateData = {
         status: newStatus,
