@@ -141,10 +141,12 @@ export default function ReceptionRequestDetail() {
 
   const createdDate = request.created_date ? new Date(request.created_date).toLocaleString("ru-RU") : "-";
   const startedDate = request.sent_to_work_date ? new Date(request.sent_to_work_date).toLocaleString("ru-RU") : "-";
+  const getAcceptedQty = (item) => Number(item.received_qty ?? item.expected_qty ?? item.quantity ?? 0);
+  const getUnitWeight = (item) => Number(item.weight_kg ?? item.weight ?? 0);
+  const getTotalItemWeight = (item) => getAcceptedQty(item) * getUnitWeight(item);
+
   const totalAcceptedWeight = (request.items || []).reduce((sum, item) => {
-    const qty = Number(item.received_qty ?? item.expected_qty ?? item.quantity ?? 0);
-    const unitWeight = Number(item.weight_kg ?? item.weight ?? 0);
-    return sum + qty * unitWeight;
+    return sum + getTotalItemWeight(item);
   }, 0);
 
   return (
@@ -247,7 +249,9 @@ export default function ReceptionRequestDetail() {
                       <td className="px-3 py-3 text-muted-foreground">{item.sku || "-"}</td>
                       <td className="px-3 py-3 text-muted-foreground">{item.received_qty ?? item.expected_qty ?? item.quantity ?? "-"}</td>
                       <td className="px-3 py-3 text-muted-foreground">{item.barcode || "-"}</td>
-                      <td className="px-3 py-3 text-muted-foreground">{item.weight_kg ?? item.weight ?? "-"}</td>
+                      <td className="px-3 py-3 text-muted-foreground">
+                        {getUnitWeight(item) > 0 ? `${getTotalItemWeight(item).toFixed(2)} кг` : "-"}
+                      </td>
                       {(role === "operator" || role === "admin") && isInProgressStatus(request.status) && (
                         <td className="px-3 py-3">
                           <Input

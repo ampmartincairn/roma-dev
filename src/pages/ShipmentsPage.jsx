@@ -13,6 +13,7 @@ import StatusBadge from "../components/wms/StatusBadge";
 import StatusStepper from "../components/wms/StatusStepper";
 import MarketplaceBadge from "../components/wms/MarketplaceBadge";
 import EmptyState from "../components/wms/EmptyState";
+import { PrintProductLabels, PrintBoxLabel, PrintPackingList } from "../components/wms/PrintDocuments";
 import moment from "moment";
 import { toast } from "sonner";
 
@@ -290,6 +291,7 @@ export default function ShipmentsPage() {
           return {
             product_name: product.name,
             sku: product.sku,
+            barcode: product.barcode || product.ean || product.code128 || "",
             quantity: Number(item.quantity),
             honest_mark: "",
           };
@@ -539,6 +541,15 @@ export default function ShipmentsPage() {
                     </div>
                   </div>
                 )}
+
+                <div className="space-y-3 pt-3 border-t">
+                  <h4 className="font-semibold text-sm">Печать документов (Code128)</h4>
+                  <div className="flex flex-wrap gap-2">
+                    <PrintProductLabels items={selectedOrder.items || []} orderId={selectedOrder.order_number} />
+                    <PrintBoxLabel order={selectedOrder} />
+                    <PrintPackingList order={selectedOrder} />
+                  </div>
+                </div>
 
                 {(role === "operator" || role === "admin") && !isFinishedStatus(selectedOrder.status) && isAllowedOutgoingStatus(selectedOrder.status) && (
                   <div className="space-y-3 pt-3 border-t">

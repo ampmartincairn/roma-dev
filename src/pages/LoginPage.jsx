@@ -13,8 +13,8 @@ export default function LoginPage() {
   const { login, error } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    username: 'admin',
-    password: 'admin123'
+    username: '',
+    password: ''
   });
 
   const handleChange = (e) => {
@@ -117,11 +117,6 @@ export default function LoginPage() {
             </Button>
           </Link>
 
-          <div className="text-xs text-muted-foreground space-y-1 p-3 bg-muted rounded">
-            <p><strong>Демо учетные данные:</strong></p>
-            <p>Пользователь: <code className="bg-background px-1 rounded">admin</code></p>
-            <p>Пароль: <code className="bg-background px-1 rounded">admin123</code></p>
-          </div>
         </CardContent>
       </Card>
     </div>

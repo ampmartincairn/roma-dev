@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Printer, Package, FileText, Tag } from "lucide-react";
+import JsBarcode from "jsbarcode";
 
 function printHtml(html, title = "Печать") {
   const win = window.open("", "_blank", "width=800,height=600");
@@ -29,6 +30,12 @@ function printHtml(html, title = "Печать") {
         .label .sku { font-size: 11px; font-weight: bold; }
         .label .name { font-size: 9px; color: #555; margin-top: 1mm; word-break: break-word; }
         .label .barcode-num { font-size: 8px; color: #888; margin-top: 1mm; }
+        .barcode-svg { width: 100%; margin: 2mm 0; display: flex; justify-content: center; }
+        .barcode-svg svg { width: 100%; max-width: 56mm; height: auto; }
+        .barcode-fallback {
+          border: 1px dashed #666; color: #111; font-size: 10px; padding: 2mm 3mm;
+          text-align: center; width: 100%;
+        }
         .barcode-bars {
           display: flex; align-items: flex-end; height: 15mm; gap: 0.3mm;
           justify-content: center; margin: 2mm 0;
@@ -67,24 +74,38 @@ function printHtml(html, title = "Печать") {
   win.document.close();
 }
 
-function generateBars(text) {
-  const heights = [12, 8, 15, 10, 12, 6, 18, 9, 14, 11, 7, 16, 10, 13, 8];
-  return Array.from(text).map((ch, i) => {
-    const h = heights[(ch.charCodeAt(0) + i) % heights.length];
-    return `<div class="bar" style="height:${h}mm"></div>`;
-  }).join("");
+function createCode128Svg(value) {
+  const barcodeValue = String(value || "NO-BARCODE").trim() || "NO-BARCODE";
+
+  try {
+    const svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    JsBarcode(svgNode, barcodeValue, {
+      format: "CODE128",
+      displayValue: false,
+      margin: 0,
+      height: 42,
+      width: 1.4,
+    });
+    return svgNode.outerHTML;
+  } catch {
+    return `<div class="barcode-fallback">${barcodeValue}</div>`;
+  }
 }
 
 export function PrintProductLabels({ items, orderId }) {
-  const labelsHtml = items.map(item => `
+  const labelsHtml = items.map((item) => {
+    const barcodeValue = item.barcode || item.product_barcode || item.sku || item.product_name || "NO-BARCODE";
+
+    return `
     <div class="label">
       <div class="sku">${item.sku || "—"}</div>
-      <div class="barcode-bars">${generateBars(item.sku || item.product_name || "X")}</div>
-      <div class="barcode-area">${item.barcode || item.sku || "NO-BARCODE"}</div>
+      <div class="barcode-svg">${createCode128Svg(barcodeValue)}</div>
+      <div class="barcode-area">${barcodeValue}</div>
       <div class="name">${item.product_name || "Товар"}</div>
       <div class="barcode-num">Заказ: ${orderId} | Кол-во: ${item.quantity || item.expected_qty || 1} шт.</div>
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   const html = `
     <div class="page">
@@ -101,6 +122,8 @@ export function PrintProductLabels({ items, orderId }) {
 }
 
 export function PrintBoxLabel({ order }) {
+  const barcodeValue = order.order_number || "NO-ORDER";
+
   const html = `
     <div class="page">
       <div class="box-label">
@@ -109,8 +132,8 @@ export function PrintBoxLabel({ order }) {
         <div class="dest">📦 ${order.destination_warehouse}</div>
         <div class="mp">Маркетплейс: ${order.marketplace}</div>
         <div style="margin-top:3mm">
-          <div class="barcode-bars">${generateBars(order.order_number)}</div>
-          <div class="barcode-area">${order.order_number}</div>
+          <div class="barcode-svg">${createCode128Svg(barcodeValue)}</div>
+          <div class="barcode-area">${barcodeValue}</div>
         </div>
         <div style="margin-top:2mm;font-size:10px">
           Упаковка: ${order.packaging_type || "—"} | Позиций: ${order.items?.length || 0}
@@ -127,6 +150,7 @@ export function PrintBoxLabel({ order }) {
 }
 
 export function PrintPackingList({ order }) {
+  const orderBarcode = order.order_number || "NO-ORDER";
   const rowsHtml = (order.items || []).map((item, idx) => `
     <tr>
       <td>${idx + 1}</td>
@@ -141,6 +165,10 @@ export function PrintPackingList({ order }) {
     <div class="packing-list">
       <h1>Упаковочный лист</h1>
       <h2>${order.order_number}</h2>
+      <div style="max-width:80mm;margin-bottom:5mm">
+        <div class="barcode-svg">${createCode128Svg(orderBarcode)}</div>
+        <div class="barcode-area">${orderBarcode}</div>
+      </div>
       <div class="meta-grid">
         <div class="meta-item"><div class="label-t">Клиент</div><div class="val">${order.client_name || order.client_email}</div></div>
         <div class="meta-item"><div class="label-t">Маркетплейс</div><div class="val">${order.marketplace}</div></div>
