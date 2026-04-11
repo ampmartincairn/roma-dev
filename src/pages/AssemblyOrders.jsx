@@ -21,6 +21,10 @@ const normalizeAssemblyStatus = (status) => {
   const normalized = status?.trim().toLowerCase();
   const aliases = {
     "отгружена": "отгружено",
+    "в обработке": "взята в работу",
+    "в комплектовке": "упаковано",
+    "упакована": "упаковано",
+    "собрана": "собрано",
   };
   return aliases[normalized] || normalized;
 };
@@ -308,11 +312,11 @@ export default function AssemblyOrders() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="active">Активные (в работе)</SelectItem>
-            <SelectItem value="all">Все заказы</SelectItem>
             <SelectItem value="новая">Новые</SelectItem>
-            <SelectItem value="в обработке">В обработке</SelectItem>
-            <SelectItem value="в комплектовке">В комплектовке</SelectItem>
-            <SelectItem value="упакована">Упакованные</SelectItem>
+            <SelectItem value="взята в работу">Взята в работу</SelectItem>
+            <SelectItem value="упаковано">Упаковано</SelectItem>
+            <SelectItem value="собрано">Собрано</SelectItem>
+            <SelectItem value="готова к отгрузке">Готова к отгрузке</SelectItem>
             <SelectItem value="отгружено">Отгруженные</SelectItem>
             <SelectItem value="отменена">Отменённые</SelectItem>
           </SelectContent>
