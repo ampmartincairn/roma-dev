@@ -17,6 +17,19 @@ import StatusStepper from "../components/wms/StatusStepper";
 import PrintDocumentsMenu from "../components/wms/PrintDocuments";
 import { toast } from "sonner";
 
+const normalizeAssemblyStatus = (status) => {
+  const normalized = status?.trim().toLowerCase();
+  const aliases = {
+    "отгружена": "отгружено",
+  };
+  return aliases[normalized] || normalized;
+};
+
+const isAssemblyOrderClosed = (status) => {
+  const normalized = normalizeAssemblyStatus(status);
+  return normalized === "отгружено" || normalized === "отменена";
+};
+
 // Резервирует товары при создании заявки
 const reserveInventoryForOrder = async (order) => {
   const requestedBySku = (order.items || []).reduce((acc, item) => {
@@ -204,24 +217,26 @@ export default function AssemblyOrders() {
     setActionLoading(true);
     try {
       const freshOrder = await db.entities.AssemblyOrder.get(order.id);
-      const wasAlreadyShipped = freshOrder?.status === "отгружена";
+      const currentStatus = normalizeAssemblyStatus(freshOrder?.status);
+      const normalizedNewStatus = normalizeAssemblyStatus(newStatus);
+      const wasAlreadyShipped = currentStatus === "отгружено";
 
       // Если отмена заявки (и она ещё не отгружена) - освобождаем резервирование
-      if (newStatus === "отменена" && !wasAlreadyShipped) {
+      if (normalizedNewStatus === "отменена" && !wasAlreadyShipped) {
         await releaseReservationForOrder(freshOrder || order);
       }
 
       // Если отгрузка (и она ещё не отгружена) - списываем товары со склада
-      if (newStatus === "отгружена" && !wasAlreadyShipped) {
+      if (normalizedNewStatus === "отгружено" && !wasAlreadyShipped) {
         await deductShippedItemsFromInventory(freshOrder || order);
       }
 
       const updateData = {
-        status: newStatus,
+        status: normalizedNewStatus,
         operator_comment: operatorComment || order.operator_comment,
         processed_by: user.email,
       };
-      if (newStatus === "отгружена") {
+      if (normalizedNewStatus === "отгружено") {
         updateData.shipped_date = new Date().toISOString();
       }
       await db.entities.AssemblyOrder.update(order.id, updateData);
@@ -245,15 +260,16 @@ export default function AssemblyOrders() {
   };
 
   const filtered = orders.filter((o) => {
+    const normalizedStatus = normalizeAssemblyStatus(o.status);
     const matchSearch = !search ||
       o.order_number?.toLowerCase().includes(search.toLowerCase()) ||
       o.client_name?.toLowerCase().includes(search.toLowerCase());
 
     let matchStatus = true;
     if (statusFilter === "active") {
-      matchStatus = o.status !== "отгружена" && o.status !== "отменена";
+      matchStatus = !isAssemblyOrderClosed(normalizedStatus);
     } else if (statusFilter !== "all") {
-      matchStatus = o.status === statusFilter;
+      matchStatus = normalizedStatus === normalizeAssemblyStatus(statusFilter);
     }
 
     return matchSearch && matchStatus;
@@ -297,7 +313,7 @@ export default function AssemblyOrders() {
             <SelectItem value="в обработке">В обработке</SelectItem>
             <SelectItem value="в комплектовке">В комплектовке</SelectItem>
             <SelectItem value="упакована">Упакованные</SelectItem>
-            <SelectItem value="отгружена">Отгруженные</SelectItem>
+            <SelectItem value="отгружено">Отгруженные</SelectItem>
             <SelectItem value="отменена">Отменённые</SelectItem>
           </SelectContent>
         </Select>
@@ -394,7 +410,7 @@ export default function AssemblyOrders() {
                 )}
 
                 {/* Status stepper for operators */}
-                {(role === "operator" || role === "admin") && selectedOrder.status !== "отгружена" && selectedOrder.status !== "отменена" && (
+                {(role === "operator" || role === "admin") && !isAssemblyOrderClosed(selectedOrder.status) && (
                   <div className="space-y-3 pt-3 border-t">
                     <h4 className="font-semibold text-sm">Смена статуса</h4>
                     <StatusStepper
