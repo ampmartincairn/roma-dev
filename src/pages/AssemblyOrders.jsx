@@ -114,10 +114,17 @@ const deductShippedItemsFromInventory = async (order) => {
       const deducted = Math.min(currentQty, remaining);
       const releaseReserved = Math.min(deducted, currentReserved);
       
-      await db.entities.Inventory.update(row.id, {
-        quantity: currentQty - deducted,
-        reserved: Math.max(0, currentReserved - releaseReserved),
-      });
+      const nextQuantity = currentQty - deducted;
+      const nextReserved = Math.max(0, currentReserved - releaseReserved);
+
+      if (nextQuantity <= 0 && nextReserved <= 0) {
+        await db.entities.Inventory.delete(row.id);
+      } else {
+        await db.entities.Inventory.update(row.id, {
+          quantity: nextQuantity,
+          reserved: nextReserved,
+        });
+      }
       remaining -= deducted;
     }
   }

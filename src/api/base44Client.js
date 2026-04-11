@@ -269,10 +269,14 @@ export const db = {
     const newQuantity = Math.max(0, Number(item.quantity || 0) - quantity);
     const newReserved = Math.max(0, Number(item.reserved || 0) - quantity);
 
-    await executeUpdate("Inventory", item.id, {
-      quantity: newQuantity,
-      reserved: newReserved,
-    });
+    if (newQuantity <= 0 && newReserved <= 0) {
+      await executeDelete("Inventory", item.id);
+    } else {
+      await executeUpdate("Inventory", item.id, {
+        quantity: newQuantity,
+        reserved: newReserved,
+      });
+    }
 
     await executeCreate("ActionLog", {
       user_email: "admin@local.dev",

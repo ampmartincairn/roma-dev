@@ -40,7 +40,9 @@ export default function InventoryPage() {
     if (user) load();
   }, [user, role]);
 
-  const filtered = inventory.filter((i) => {
+  const inStockInventory = inventory.filter((i) => Number(i.quantity || 0) > 0);
+
+  const filtered = inStockInventory.filter((i) => {
     return !search ||
       i.product_name?.toLowerCase().includes(search.toLowerCase()) ||
       i.sku?.toLowerCase().includes(search.toLowerCase());
